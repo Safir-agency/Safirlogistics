@@ -12,3 +12,4 @@ class ClientStates(StatesGroup):
     waiting_for_links = State()
     waiting_for_phone_number = State()
     waiting_for_location = State()
+    waiting_for_ts_message = State()
