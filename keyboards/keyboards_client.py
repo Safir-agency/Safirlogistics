@@ -43,15 +43,46 @@ def set_back_button() -> InlineKeyboardMarkup:
     )
     return keyboard
 
+
+def choose_fba_or_fbm() -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="FBA ✅", callback_data=ClientCallbackFactory(
+                    action="fba").pack()),
+                InlineKeyboardButton(text="FBM ✅", callback_data=ClientCallbackFactory(
+                    action="fbm").pack())
+            ]
+        ],
+        resize_keyboard=True,
+    )
+    return keyboard
+
+
+def set_or_not_set() -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Set ✅", callback_data=ClientCallbackFactory(
+                    action="set").pack()),
+                InlineKeyboardButton(text="Not set ❌", callback_data=ClientCallbackFactory(
+                    action="not_set").pack())
+            ]
+        ],
+        resize_keyboard=True,
+    )
+    return keyboard
+
+
 def end_conversation() -> ReplyKeyboardMarkup:
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="End conversation 🔚", callback_data=ClientCallbackFactory(
+                KeyboardButton(text="End conversation 🚪", callback_data=ClientCallbackFactory(
                     action="end").pack())
             ]
         ],
         resize_keyboard=True,
-        one_time_keyboard=True
     )
     return keyboard
+

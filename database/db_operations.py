@@ -3,7 +3,7 @@ import re
 from peewee import DoesNotExist
 from typing import Tuple, List
 
-from database.models import TelegramUsers, Subscriptions
+from database.models import TelegramUsers, Subscriptions, Form, Clients
 from py_logger import get_logger
 from datetime import datetime, time
 
@@ -38,6 +38,7 @@ async def get_telegram_user_id(username):
     except TelegramUsers.DoesNotExist:
         print(f"User with username {username} not found.")
         return None
+
 
 async def save_subscription(subscription_name, description, price, button_label):
     try:
@@ -80,3 +81,46 @@ async def delete_subscription(subscription_id: int):
         logger.error(f"Subscription with name {subscription_id} not found.")
 
 
+async def save_product_name(product_name):
+    try:
+        product, created = Form.get_or_create(
+            product_name=product_name)
+
+        if created:
+            logger.info(f"New product saved to database: {product.product_name}")
+        else:
+            logger.info(f"Product does not created: {product.product_name}")
+
+    except ValueError as e:
+        logger.error(f"Error while saving product to database: {e}")
+
+
+async def save_application_to_db(product_name, asin, phone_number):
+    try:
+        form, created = Form.get_or_create(
+            product_name=product_name,
+            ASIN=asin,
+            phone_number=phone_number)
+        if created:
+            logger.info(f"New application saved to database: {form.product_name}")
+        return form.id  # Возвращаем идентификатор созданной формы
+    except DoesNotExist as e:
+        logger.error(f"Error while saving application to database: {e}")
+        return None  # Возвращаем None, если произошла ошибка
+
+
+async def save_client_to_db(telegram_id, form_id):
+    try:
+        client, created = Clients.get_or_create(
+            telegram_id=TelegramUsers.get(TelegramUsers.telegram_id == telegram_id).id,
+            form_id=form_id)
+
+        logger.info(f"telegram_id: {telegram_id} with form_id: {form_id}")
+
+        if created:
+            logger.info(f"New client saved to database: {client.telegram_id}")
+        else:
+            logger.info(f"Cannot create client: {client.telegram_id}")
+
+    except Exception as e:
+        logger.error(f"Error while saving client to database: {e}")

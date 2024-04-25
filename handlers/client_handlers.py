@@ -4,12 +4,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 
 from create_bot import bot
-from database.db_operations import save_user_to_db
+from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db
 from database.models import TelegramUsers
 
-from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_button, end_conversation
+from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_button, end_conversation, \
+    choose_fba_or_fbm, set_or_not_set
 
-from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION
+from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, LEXICON_NAME_OF_PRODUCT, \
+    LEXICON_CHOOSE_FBM_OR_FBA, LEXICON_ASIN, LEXICON_SET_OR_NOT_SET, LEXICON_NUMBER_OF_UNITS_NOT_SET, \
+    LEXICON_NUMBER_OF_SETS, LEXICON_NUMBER_OF_UNITS_IN_SET, \
+    LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION
 
 from states.states_client import ClientCallbackFactory, ClientStates
 from emoji import emojize
@@ -111,26 +115,203 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
                                    callback.from_user.language_code,
                                    LEXICON_TECHNICAL_SUPPORT['en']),
                                reply_markup=end_conversation())
-
         await state.set_state(ClientStates.waiting_for_ts_message)
+
     except ValueError as e:
         logger.error(f"Error while sending contacts message: {e}")
         await callback.answer("An error occurred. Please try again later.")
 
 
-"""End conversation"""
+'''Submit an application'''
 
-@router.callback_query(ClientStates.waiting_for_ts_message, ClientCallbackFactory.filter(F.action == 'end'))
-async def end(callback: CallbackQuery, callback_data: ClientCallbackFactory, state: FSMContext):
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
+async def form(callback: CallbackQuery, state: FSMContext):
     try:
-        logger.info(f"End command from user {callback.from_user.id}")
+        logger.info(f"Form command from user {callback.from_user.id}")
+
+        await callback.message.answer(text=LEXICON_NAME_OF_PRODUCT.get(callback.from_user.language_code,
+                                                                       LEXICON_NAME_OF_PRODUCT['en']))
+
+        await state.set_state(ClientStates.waiting_for_product_name)
+
+    except ValueError as e:
+        logger.error(f"Error while sending form message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_product_name)
+async def add_asin(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Product name from user {message.from_user.id}")
+
+        product_name = message.text
+
+        await state.update_data(product_name=product_name)
+
+        await message.answer(text=LEXICON_ASIN.get(
+            message.from_user.language_code, LEXICON_ASIN['en']))
+
+        await state.set_state(ClientStates.waiting_for_asin)
+
+    except ValueError as e:
+        logger.error(f"Error while sending product name message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_asin)
+async def choose_fbm_or_fba(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Product name from user {message.from_user.id}")
+
+        asin = message.text
+
+        await state.update_data(asin=asin)
+
+        await message.answer(text=LEXICON_CHOOSE_FBM_OR_FBA.get(
+            message.from_user.language_code, LEXICON_CHOOSE_FBM_OR_FBA['en']),
+            reply_markup=choose_fba_or_fbm())
+
+    except ValueError as e:
+        logger.error(f"Error while sending product name message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'fba'))
+async def fba(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"FBA command from user {callback.from_user.id}")
+
+        # await callback.message.delete()
         await bot.send_message(chat_id=callback.from_user.id,
-                               text=LEXICON_END_CONVERSATION.get(
+                               text=LEXICON_SET_OR_NOT_SET.get(
                                    callback.from_user.language_code,
-                                   LEXICON_END_CONVERSATION['en']),
-                               reply_markup=set_main_menu())
+                                   LEXICON_SET_OR_NOT_SET['en']),
+                               reply_markup=set_or_not_set())
+
+    except ValueError as e:
+        logger.error(f"Error while sending FBA message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'fbm'))
+async def fbm(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"FBM command from user {callback.from_user.id}")
+
+        # await callback.message.delete()
+        await bot.send_message(chat_id=callback.from_user.id,
+                               text=LEXICON_SET_OR_NOT_SET.get(
+                                   callback.from_user.language_code,
+                                   LEXICON_SET_OR_NOT_SET['en']),
+                               reply_markup=set_or_not_set())
+
+    except ValueError as e:
+        logger.error(f"Error while sending FBM message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'not_set'))
+async def not_set(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Set command from user {callback.from_user.id}")
+
+        # await callback.message.delete()
+        await bot.send_message(chat_id=callback.from_user.id,
+                               text=LEXICON_NUMBER_OF_UNITS_NOT_SET.get(
+                                   callback.from_user.language_code,
+                                   LEXICON_NUMBER_OF_UNITS_NOT_SET['en']))
+
+        await state.set_state(ClientStates.waiting_for_number_of_units)
+    except ValueError as e:
+        logger.error(f"Error while sending set message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'set'))
+async def set(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Set command from user {callback.from_user.id}")
+
+        # await callback.message.delete()
+        await bot.send_message(chat_id=callback.from_user.id,
+                               text=LEXICON_NUMBER_OF_SETS.get(
+                                   callback.from_user.language_code,
+                                   LEXICON_NUMBER_OF_SETS['en']))
+
+        await state.set_state(ClientStates.waiting_for_number_of_sets)
+    except ValueError as e:
+        logger.error(f"Error while sending set message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_number_of_sets)
+async def number_of_sets(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Number of sets from user {message.from_user.id}")
+
+        number_of_sets = message.text
+
+        await state.update_data(number_of_sets=number_of_sets)
+
+        await message.answer(text=LEXICON_NUMBER_OF_UNITS_IN_SET.get(
+            message.from_user.language_code, LEXICON_NUMBER_OF_UNITS_IN_SET['en']))
+
+        await state.set_state(ClientStates.waiting_for_number_of_units)
+
+    except ValueError as e:
+        logger.error(f"Error while sending number of sets message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_number_of_units)
+async def number_of_units(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Number of units from user {message.from_user.id}")
+
+        number_of_units = message.text
+
+        await state.update_data(number_of_units=number_of_units)
+
+        await message.answer(text=LEXICON_PHONE_NUMBER.get(
+            message.from_user.language_code,
+            LEXICON_PHONE_NUMBER['en']),
+            reply_markup=set_number_btn())
+
+        await state.set_state(ClientStates.waiting_for_phone_number)
+
+    except ValueError as e:
+        logger.error(f"Error while sending number of units message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.message(F.content_type.in_({'contact'}))
+async def process_phone(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Phone callback from user {message.from_user.id}")
+        # await message.delete()
+
+        phone_number = message.contact.phone_number
+
+        await state.update_data(phone_number=phone_number)
+
+        await message.answer(text=LEXICON_END_APPLICATION.get(
+            message.from_user.language_code, LEXICON_END_APPLICATION['en']),
+            reply_markup=set_main_menu())
+
+        data = await state.get_data()
+        logger.info(f"Data: {data}")
+
+        telegram_id = message.from_user.id
+        telegram_username = message.from_user.username
+        logger.info(f"User data: {telegram_id}, {telegram_username}")
+
+        form_id = await save_application_to_db(data['product_name'], data['asin'], data['phone_number'])
+        if form_id is not None:
+            await save_client_to_db(telegram_id, form_id)
 
         await state.clear()
+
     except ValueError as e:
-        logger.error(f"Error while sending end message: {e}")
-        await callback.answer("An error occurred. Please try again later.")
+        logger.error(f"Error while sending phone number message: {e}")
+        await message.answer("An error occurred. Please try again later.")

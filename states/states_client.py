@@ -11,5 +11,7 @@ class ClientCallbackFactory(CallbackData, prefix="client"):
 class ClientStates(StatesGroup):
     waiting_for_links = State()
     waiting_for_phone_number = State()
-    waiting_for_location = State()
-    waiting_for_ts_message = State()
+    waiting_for_asin = State()
+    waiting_for_product_name = State()
+    waiting_for_number_of_units = State()
+    waiting_for_number_of_sets = State()

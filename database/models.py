@@ -70,9 +70,11 @@ class Subscriptions(BaseModel):
 
 class Form(BaseModel):
     id = AutoField()
-    links = CharField()
+    product_name = CharField()
+    FBA = BooleanField(default=False)
+    FBM = BooleanField(default=False)
+    ASIN = CharField()
     phone_number = CharField()
-    location = CharField()
     created_at = DateTimeField(default=datetime.datetime.now)
     updated_at = DateTimeField(default=datetime.datetime.now)
 
@@ -80,10 +82,76 @@ class Form(BaseModel):
         database = db
         db_table = 'form'
 
+class FormFBA(BaseModel):
+    id = AutoField()
+    form_id = ForeignKeyField(Form, backref='form_fba', on_delete='CASCADE')
+    number_of_units = IntegerField()
+    comment = CharField(default='')
+    SET = BooleanField(default=False)
+    NOT_SET = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'form_fba'
+
+
+class FormFBM(BaseModel):
+    id = AutoField()
+    form_id = ForeignKeyField(Form, backref='form_fbm', on_delete='CASCADE')
+    number_of_units = IntegerField()
+    SET = BooleanField(default=False)
+    NOT_SET = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'form_fbm'
+
+
+class Set(BaseModel):
+    id = AutoField()
+    form_fba_id = ForeignKeyField(FormFBA, backref='set', on_delete='CASCADE')
+    form_fbm_id = ForeignKeyField(FormFBM, backref='set', on_delete='CASCADE')
+    number_of_units_in_set = IntegerField()
+    number_of_sets = IntegerField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'set'
+
+class SecondStage(BaseModel):
+    id = AutoField()
+    form_fba_id = ForeignKeyField(FormFBA, backref='second_stage', on_delete='CASCADE')
+    FNSKU_label = CharField()
+    shipping_label = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'second_stage'
+
+class SecondStageAdmin(BaseModel):
+    id = AutoField()
+    form_fba_id = ForeignKeyField(FormFBA, backref='second_stage', on_delete='CASCADE')
+    weight = FloatField()
+    dimensions = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'second_stage_admin'
 
 class Clients(BaseModel):
     id = AutoField()
     telegram_id = ForeignKeyField(TelegramUsers, backref='clients', on_delete='CASCADE')
+    form_id = ForeignKeyField(Form, backref='clients', on_delete='CASCADE')
 
     class Meta:
         database = db
@@ -94,6 +162,12 @@ def create_tables():
         db.create_tables([TelegramUsers], safe=True)
         db.create_tables([Roles], safe=True)
         db.create_tables([Subscriptions], safe=True)
+        db.create_tables([Form], safe=True)
+        db.create_tables([FormFBA], safe=True)
+        db.create_tables([FormFBM], safe=True)
+        db.create_tables([Set], safe=True)
+        db.create_tables([SecondStage], safe=True)
+        db.create_tables([SecondStageAdmin], safe=True)
         # db.create_tables([Discounts], safe=True)
         db.create_tables([Form], safe=True)
         db.create_tables([Clients], safe=True)
