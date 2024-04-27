@@ -1,26 +1,60 @@
+import os
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, \
     KeyboardButton
 from emoji import emojize
+from aiogram import types
 
 from states.states_client import ClientCallbackFactory
+from config_data.config import Config, load_config
 
 
-def set_main_menu() -> InlineKeyboardMarkup:
+config: Config = load_config('./config_data/.env')
+WEB_APP_URL = os.getenv('WEB_APP_URL')
+
+# def set_main_menu(user_id: int) -> InlineKeyboardMarkup:
+#     keyboard = types.InlineKeyboardMarkup(
+#         inline_keyboard=[
+#             [
+#                 InlineKeyboardButton(
+#                     text="Submit an application 📝",
+#                     callback_data=ClientCallbackFactory(action="form").pack(),
+#                     web_app=types.WebAppInfo(url=f'{WEB_APP_URL}/form?userId={user_id}')
+#                 )
+#             ],
+#             [
+#                 InlineKeyboardButton(
+#                     text="Subscription 💵",
+#                     callback_data=ClientCallbackFactory(action="prices").pack()
+#                 ),
+#                 InlineKeyboardButton(
+#                     text="Technical Support 📱",
+#                     callback_data=ClientCallbackFactory(action="contacts").pack()
+#                 )
+#             ]
+#         ],
+#         resize_keyboard=True,
+#     )
+#     return keyboard
+
+def set_main_menu(user_id: int) -> InlineKeyboardMarkup:
+    button_1 = InlineKeyboardButton(
+        text="Submit an application 📝",
+        web_app=types.WebAppInfo(url=f'{WEB_APP_URL}/form?userId={user_id}')
+    )
+    button_2 = InlineKeyboardButton(
+        text="Subscription 💵",
+        callback_data=ClientCallbackFactory(action="prices").pack()
+    )
+    button_3 = InlineKeyboardButton(
+        text="Technical Support 📱",
+        callback_data=ClientCallbackFactory(action="contacts").pack()
+    )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Submit an application 📝", callback_data=ClientCallbackFactory(
-                    action="form").pack())
-            ],
-            [
-                InlineKeyboardButton(text="Subscription 💵", callback_data=ClientCallbackFactory(
-                    action="prices").pack()),
-                InlineKeyboardButton(text="Technical Support 📱", callback_data=ClientCallbackFactory(
-                    action="contacts").pack())
-            ]
-        ],
-        resize_keyboard=True,
-
+            [button_1],
+            [button_2, button_3]
+        ]
     )
     return keyboard
 
