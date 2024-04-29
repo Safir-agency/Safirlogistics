@@ -95,11 +95,13 @@ async def prices(callback: CallbackQuery, callback_data: ClientCallbackFactory):
 
 
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'back'))
-async def back(callback: CallbackQuery, callback_data: ClientCallbackFactory):
+async def back(callback: CallbackQuery):
     try:
         logger.info(f"Back command from user {callback.from_user.id}")
         await callback.message.delete()
-        await bot.send_message(chat_id=callback.from_user.id, text="Main menu", reply_markup=set_main_menu())
+
+        await bot.send_message(chat_id=callback.from_user.id, text="Main menu", reply_markup=set_main_menu(user_id=callback.from_user.id))
+
     except ValueError as e:
         logger.error(f"Error while sending back message: {e}")
         await callback.answer("An error occurred. Please try again later.")
@@ -118,14 +120,13 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
                                    callback.from_user.language_code,
                                    LEXICON_TECHNICAL_SUPPORT['en']),
                                reply_markup=end_conversation())
-        # await state.set_state(ClientStates.waiting_for_ts_message)
 
     except ValueError as e:
         logger.error(f"Error while sending contacts message: {e}")
         await callback.answer("An error occurred. Please try again later.")
 
 
-'''Submit an application'''
+# '''Submit an application'''
 
 # @router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
 # async def form(callback: CallbackQuery, state: FSMContext):
