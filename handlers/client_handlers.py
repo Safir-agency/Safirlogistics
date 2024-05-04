@@ -6,7 +6,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 
 from create_bot import bot
-from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db
+from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db, change_fba_status, \
+    change_fbm_status
 from database.models import TelegramUsers
 
 from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_button, end_conversation, \
@@ -31,6 +32,7 @@ logger = get_logger(__name__)
 router = Router()
 config: Config = load_config('./config_data/.env')
 WEB_APP_URL = os.getenv('WEB_APP_URL')
+
 
 ''' Client main menu '''
 
@@ -126,21 +128,21 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
         await callback.answer("An error occurred. Please try again later.")
 
 
-# '''Submit an application'''
+'''Submit an application'''
 
-# @router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
-# async def form(callback: CallbackQuery, state: FSMContext):
-#     try:
-#         logger.info(f"Form command from user {callback.from_user.id}")
-#
-#         await callback.message.answer(text=LEXICON_NAME_OF_PRODUCT.get(callback.from_user.language_code,
-#                                                                        LEXICON_NAME_OF_PRODUCT['en']))
-#
-#         await state.set_state(ClientStates.waiting_for_product_name)
-#
-#     except ValueError as e:
-#         logger.error(f"Error while sending form message: {e}")
-#         await callback.answer("An error occurred. Please try again later.")
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
+async def form(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Form command from user {callback.from_user.id}")
+
+        await callback.message.answer(text=LEXICON_NAME_OF_PRODUCT.get(callback.from_user.language_code,
+                                                                       LEXICON_NAME_OF_PRODUCT['en']))
+
+        await state.set_state(ClientStates.waiting_for_product_name)
+
+    except ValueError as e:
+        logger.error(f"Error while sending form message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
 
 
 # @router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
@@ -199,8 +201,8 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
 # async def fba(callback: CallbackQuery, state: FSMContext):
 #     try:
 #         logger.info(f"FBA command from user {callback.from_user.id}")
+#         await state.update_data(client_choice='FBA')
 #
-#         # await callback.message.delete()
 #         await bot.send_message(chat_id=callback.from_user.id,
 #                                text=LEXICON_SET_OR_NOT_SET.get(
 #                                    callback.from_user.language_code,
@@ -216,8 +218,8 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
 # async def fbm(callback: CallbackQuery, state: FSMContext):
 #     try:
 #         logger.info(f"FBM command from user {callback.from_user.id}")
+#         await state.update_data(client_choice='FBM')
 #
-#         # await callback.message.delete()
 #         await bot.send_message(chat_id=callback.from_user.id,
 #                                text=LEXICON_SET_OR_NOT_SET.get(
 #                                    callback.from_user.language_code,
@@ -315,7 +317,7 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
 #
 #         await message.answer(text=LEXICON_END_APPLICATION.get(
 #             message.from_user.language_code, LEXICON_END_APPLICATION['en']),
-#             reply_markup=set_main_menu())
+#             reply_markup=set_main_menu(user_id=message.from_user.id))
 #
 #         data = await state.get_data()
 #         logger.info(f"Data: {data}")
@@ -324,7 +326,8 @@ async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: Cl
 #         telegram_username = message.from_user.username
 #         logger.info(f"User data: {telegram_id}, {telegram_username}")
 #
-#         form_id = await save_application_to_db(data['product_name'], data['asin'], data['phone_number'])
+#         client_choice = data.get('client_choice')
+#         form_id = await save_application_to_db(data['product_name'], data['asin'], data['phone_number'], choice=client_choice)
 #         if form_id is not None:
 #             await save_client_to_db(telegram_id, form_id)
 #

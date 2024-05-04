@@ -58,7 +58,7 @@ def main():
 
     # Регистрируем роутер в диспетчере
     dp.include_router(client_handlers.router)
-    # dp.include_router(handlers_admin.router)
+    dp.include_router(handlers_admin.router)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

@@ -95,18 +95,41 @@ async def save_product_name(product_name):
         logger.error(f"Error while saving product to database: {e}")
 
 
-async def save_application_to_db(product_name, asin, phone_number):
+async def change_fba_status(product_name, status):
+    try:
+        logger.info(f"Product name: {product_name}, status FBA: {status}")
+    except ValueError as e:
+        logger.error(f"Error while changing FBA status: {e}")
+
+
+async def change_fbm_status(product_name, status):
+    try:
+        logger.info(f"Product name: {product_name}, status FBM: {status}")
+    except ValueError as e:
+        logger.error(f"Error while changing FBM status: {e}")
+
+
+async def save_application_to_db(product_name, asin, phone_number, choice):
     try:
         form, created = Form.get_or_create(
             product_name=product_name,
             ASIN=asin,
             phone_number=phone_number)
+
         if created:
             logger.info(f"New application saved to database: {form.product_name}")
-        return form.id  # Возвращаем идентификатор созданной формы
+            if choice == 'FBA':
+                await change_fba_status(product_name, True)
+                await change_fbm_status(product_name, False)
+            elif choice == 'FBM':
+                await change_fba_status(product_name, False)
+                await change_fbm_status(product_name, True)
+
+        logger.info(f"New application saved to database: {form.product_name}")
+        return form.id
     except DoesNotExist as e:
         logger.error(f"Error while saving application to database: {e}")
-        return None  # Возвращаем None, если произошла ошибка
+        return None
 
 
 async def save_client_to_db(telegram_id, form_id):

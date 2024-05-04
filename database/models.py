@@ -103,6 +103,7 @@ class FormFBM(BaseModel):
     number_of_units = IntegerField()
     SET = BooleanField(default=False)
     NOT_SET = BooleanField(default=False)
+    comment = CharField(default='')
     created_at = DateTimeField(default=datetime.datetime.now)
     updated_at = DateTimeField(default=datetime.datetime.now)
 
