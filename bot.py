@@ -31,7 +31,7 @@ print('WEB_SERVER_HOST:', WEB_SERVER_HOST,
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "my-secret"
 BASE_WEBHOOK_URL = os.getenv('BASE_WEBHOOK_URL')
-print(f'{WEB_APP_URL}/form')
+print(f'{WEB_APP_URL}')
 
 router = Router()
 

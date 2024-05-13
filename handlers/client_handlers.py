@@ -16,7 +16,7 @@ from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_b
 from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, LEXICON_NAME_OF_PRODUCT, \
     LEXICON_CHOOSE_FBM_OR_FBA, LEXICON_ASIN, LEXICON_SET_OR_NOT_SET, LEXICON_NUMBER_OF_UNITS_NOT_SET, \
     LEXICON_NUMBER_OF_SETS, LEXICON_NUMBER_OF_UNITS_IN_SET, \
-    LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION
+    LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION, LEXICON_CHOOSE_AN_ACTION
 
 from states.states_client import ClientCallbackFactory, ClientStates
 from emoji import emojize
@@ -73,19 +73,17 @@ async def start(message):
         logger.error(f"Error while sending start message: {e}")
         await message.answer("An error occurred. Please try again later.")
 
-
-"""Subscriptions"""
-
+'''Subscription prices'''
 
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'prices'))
 async def prices(callback: CallbackQuery, callback_data: ClientCallbackFactory):
     try:
         logger.info(f"Prices command from user {callback.from_user.id}")
-        await callback.message.delete()
+        # await callback.message.delete()
 
         await bot.send_photo(
             chat_id=callback.from_user.id,
-            photo=BufferedInputFile.from_file(path='./assets/SafirPrepPrice2024.png'),
+            photo=BufferedInputFile.from_file(path='./assets/SafirPrepPrice_2024_RU.png'),
             reply_markup=set_back_button()
         )
     except ValueError as e:
@@ -102,7 +100,9 @@ async def back(callback: CallbackQuery):
         logger.info(f"Back command from user {callback.from_user.id}")
         await callback.message.delete()
 
-        await bot.send_message(chat_id=callback.from_user.id, text="Main menu", reply_markup=set_main_menu(user_id=callback.from_user.id))
+        await bot.send_message(chat_id=callback.from_user.id, text=LEXICON_CHOOSE_AN_ACTION.get(
+            callback.from_user.language_code, LEXICON_CHOOSE_AN_ACTION['en']
+        ), reply_markup=set_main_menu(user_id=callback.from_user.id))
 
     except ValueError as e:
         logger.error(f"Error while sending back message: {e}")
@@ -116,7 +116,7 @@ async def back(callback: CallbackQuery):
 async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: ClientCallbackFactory):
     try:
         logger.info(f"Contacts command from user {callback.from_user.id}")
-        await callback.message.delete()
+        # await callback.message.delete()
         await bot.send_message(chat_id=callback.from_user.id,
                                text=LEXICON_TECHNICAL_SUPPORT.get(
                                    callback.from_user.language_code,
