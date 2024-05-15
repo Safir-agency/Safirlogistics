@@ -7,16 +7,18 @@ from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeybo
 
 from create_bot import bot
 from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db, change_fba_status, \
-    change_fbm_status
+    change_fbm_status, save_user_who_wrote_to_tech_support
 from database.models import TelegramUsers
+from keyboards.keyboard_admin import set_answer_to_client
 
-from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_button, end_conversation, \
-    choose_fba_or_fbm, set_or_not_set
+from keyboards.keyboards_client import set_number_btn, set_main_menu, set_back_button, \
+    choose_fba_or_fbm, set_or_not_set, end_conversation_button
 
 from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, LEXICON_NAME_OF_PRODUCT, \
     LEXICON_CHOOSE_FBM_OR_FBA, LEXICON_ASIN, LEXICON_SET_OR_NOT_SET, LEXICON_NUMBER_OF_UNITS_NOT_SET, \
     LEXICON_NUMBER_OF_SETS, LEXICON_NUMBER_OF_UNITS_IN_SET, \
     LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION, LEXICON_CHOOSE_AN_ACTION
+from states.states_admin import AdminCallbackFactory
 
 from states.states_client import ClientCallbackFactory, ClientStates
 from emoji import emojize
@@ -33,6 +35,7 @@ router = Router()
 config: Config = load_config('./config_data/.env')
 WEB_APP_URL = os.getenv('WEB_APP_URL')
 
+tech_support_chat_id = os.getenv('CHAT_ID')
 
 ''' Client main menu '''
 
@@ -73,7 +76,9 @@ async def start(message):
         logger.error(f"Error while sending start message: {e}")
         await message.answer("An error occurred. Please try again later.")
 
+
 '''Subscription prices'''
+
 
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'prices'))
 async def prices(callback: CallbackQuery, callback_data: ClientCallbackFactory):
@@ -81,11 +86,18 @@ async def prices(callback: CallbackQuery, callback_data: ClientCallbackFactory):
         logger.info(f"Prices command from user {callback.from_user.id}")
         # await callback.message.delete()
 
-        await bot.send_photo(
-            chat_id=callback.from_user.id,
-            photo=BufferedInputFile.from_file(path='./assets/SafirPrepPrice_2024_RU.png'),
-            reply_markup=set_back_button()
-        )
+        if callback.from_user.language_code == 'ru':
+            await bot.send_photo(
+                chat_id=callback.from_user.id,
+                photo=BufferedInputFile.from_file(path='./assets/SafirPrepPrice_2024_RU.png'),
+                reply_markup=set_back_button()
+            )
+        else:
+            await bot.send_photo(
+                chat_id=callback.from_user.id,
+                photo=BufferedInputFile.from_file(path='./assets/Price SafirLogistics_2024_EN.png'),
+                reply_markup=set_back_button()
+            )
     except ValueError as e:
         logger.error(f"Error while sending prices message: {e}")
         await callback.answer("An error occurred. Please try again later.")
@@ -111,24 +123,78 @@ async def back(callback: CallbackQuery):
 
 """Contact us"""
 
-
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'contacts'))
 async def contacts(callback: CallbackQuery, state: FSMContext, callback_data: ClientCallbackFactory):
     try:
         logger.info(f"Contacts command from user {callback.from_user.id}")
-        # await callback.message.delete()
+
         await bot.send_message(chat_id=callback.from_user.id,
                                text=LEXICON_TECHNICAL_SUPPORT.get(
                                    callback.from_user.language_code,
                                    LEXICON_TECHNICAL_SUPPORT['en']),
-                               reply_markup=end_conversation())
+                               reply_markup=end_conversation_button())
+
+        await state.set_state(ClientStates.waiting_for_message_from_client)
 
     except ValueError as e:
         logger.error(f"Error while sending contacts message: {e}")
         await callback.answer("An error occurred. Please try again later.")
 
 
+"""Technical support conversation"""
+@router.message(ClientStates.waiting_for_message_from_client)
+async def tech_support_conversation(message: Message, state: FSMContext):
+    try:
+        logger.info(f"Technical support message from user {message.from_user.id}")
+
+        user_id = message.from_user.id
+        username = message.from_user.username
+        print(f"User id: {user_id}, username: {username}")
+
+        await save_user_who_wrote_to_tech_support(user_id, message.text)
+
+        await bot.send_message(chat_id=tech_support_chat_id,
+                               text=f"<b>User:</b> @{username}\n"
+                                    f"<b>Message:</b> {message.text}",
+                               reply_markup=set_answer_to_client())
+        await message.answer("Your message has been sent to the technical support team. They will contact you shortly.")
+        await state.set_state(ClientStates.waiting_for_message_from_tech_support)
+
+    except ValueError as e:
+        logger.error(f"Error while sending tech support message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+"""Answer from technical support """
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'answer_to_client'))
+async def answer_to_client(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Answer to client command from user {callback.from_user.id}")
+
+        await callback.message.answer("Please enter your message to the client.")
+        await state.set_state(ClientStates.waiting_for_message_from_tech_support)
+
+    except ValueError as e:
+        logger.error(f"Error while sending answer to client message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+"""End conversation"""
+
+@router.message(F.text == 'End conversation 🚪')
+async def end_conversation(message: Message):
+    try:
+        logger.info(f"End conversation command from user {message.from_user.id}")
+        await message.answer(LEXICON_END_CONVERSATION.get(
+            message.from_user.language_code,
+            LEXICON_END_CONVERSATION['en']),
+            reply_markup=set_main_menu(user_id=message.from_user.id))
+    except ValueError as e:
+        logger.error(f"Error while sending end conversation message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
 '''Submit an application'''
+
 
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
 async def form(callback: CallbackQuery, state: FSMContext):
@@ -143,7 +209,6 @@ async def form(callback: CallbackQuery, state: FSMContext):
     except ValueError as e:
         logger.error(f"Error while sending form message: {e}")
         await callback.answer("An error occurred. Please try again later.")
-
 
 # @router.callback_query(ClientCallbackFactory.filter(F.action == 'form'))
 # async def form(callback: CallbackQuery, state: FSMContext):

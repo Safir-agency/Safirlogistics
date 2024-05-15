@@ -54,6 +54,16 @@ class Subscriptions(BaseModel):
         db_table = 'subscriptions'
 
 
+class ClientsWriteToTechSupport(BaseModel):
+    id = AutoField()
+    telegram_id = ForeignKeyField(TelegramUsers, backref='clients_write_to_tech_support', on_delete='CASCADE')
+    message = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'clients_write_to_tech_support'
+
 # class Discounts(BaseModel):
 #     id = AutoField()
 #     subscription_id = ForeignKeyField(Subscriptions, backref='discounts', on_delete='CASCADE')
@@ -172,6 +182,7 @@ def create_tables():
         # db.create_tables([Discounts], safe=True)
         db.create_tables([Form], safe=True)
         db.create_tables([Clients], safe=True)
+        db.create_tables([ClientsWriteToTechSupport], safe=True)
 
 
 # def do_peewee_migration():

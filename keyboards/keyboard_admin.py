@@ -93,3 +93,15 @@ def set_orders_menu(lang) -> InlineKeyboardMarkup:
     )
 
     return keyboard
+
+# Button for admin to answer to client
+def set_answer_to_client() -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Answer to client? 📋",
+                                     callback_data=AdminCallbackFactory(action="answer_to_client").pack())
+            ]
+        ]
+    )
+    return keyboard

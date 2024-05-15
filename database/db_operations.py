@@ -3,7 +3,7 @@ import re
 from peewee import DoesNotExist
 from typing import Tuple, List
 
-from database.models import TelegramUsers, Subscriptions, Form, Clients
+from database.models import TelegramUsers, Subscriptions, Form, Clients, ClientsWriteToTechSupport
 from py_logger import get_logger
 from datetime import datetime, time
 
@@ -30,6 +30,21 @@ async def save_user_to_db(user_data):
     except Exception as e:
         print(f"Error while saving user to database: {e}")
 
+
+async def save_user_who_wrote_to_tech_support(telegram_id, message):
+    try:
+        user = TelegramUsers.get(TelegramUsers.telegram_id == telegram_id)
+        client, created = ClientsWriteToTechSupport.get_or_create(
+            telegram_id=user.id,
+            message=message)
+
+        if created:
+            print(f"New client saved to database tech support: {client.telegram_id}")
+        else:
+            print(f"Client already exists in database tech support: {client.telegram_id}")
+
+    except Exception as e:
+        print(f"Error while saving client to database tech support: {e}")
 
 async def get_telegram_user_id(username):
     try:

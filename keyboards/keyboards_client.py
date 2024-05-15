@@ -108,15 +108,13 @@ def set_or_not_set() -> InlineKeyboardMarkup:
     return keyboard
 
 
-def end_conversation() -> ReplyKeyboardMarkup:
+def end_conversation_button() -> ReplyKeyboardMarkup:
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [
-                KeyboardButton(text="End conversation 🚪", callback_data=ClientCallbackFactory(
-                    action="end").pack())
-            ]
+            [KeyboardButton(text="End conversation 🚪")]
         ],
         resize_keyboard=True,
     )
     return keyboard
+
 
