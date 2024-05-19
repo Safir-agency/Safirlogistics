@@ -149,6 +149,8 @@ async def tech_support_conversation(message: Message, state: FSMContext):
 
         user_id = message.from_user.id
         username = message.from_user.username
+
+        await state.update_data(user_id=user_id, username=username)
         print(f"User id: {user_id}, username: {username}")
 
         await save_user_who_wrote_to_tech_support(user_id, message.text)
@@ -167,16 +169,17 @@ async def tech_support_conversation(message: Message, state: FSMContext):
 
 """Answer from technical support """
 @router.callback_query(AdminCallbackFactory.filter(F.action == 'answer_to_client'))
-async def answer_to_client(callback: CallbackQuery, state: FSMContext):
+async def answer_to_client(message: Message, state: FSMContext):
     try:
-        logger.info(f"Answer to client command from user {callback.from_user.id}")
+        logger.info(f"Answer to client command from chat {message.from_user.id}")
 
-        await callback.message.answer("Please enter your message to the client.")
+        await message.answer("Please write your answer to the client.")
         await state.set_state(ClientStates.waiting_for_message_from_tech_support)
 
     except ValueError as e:
         logger.error(f"Error while sending answer to client message: {e}")
-        await callback.answer("An error occurred. Please try again later.")
+        await message.answer("An error occurred. Please try again later.")
+
 
 """End conversation"""
 
