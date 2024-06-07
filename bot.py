@@ -10,7 +10,7 @@ from aiogram import types
 
 from create_bot import *
 
-from database.models import create_tables
+from database.models import create_tables, do_peewee_migration
 from handlers import handlers_admin, client_handlers
 from py_logger import get_logger
 from dotenv import load_dotenv
@@ -85,3 +85,4 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     main()
+    # do_peewee_migration()

@@ -133,3 +133,46 @@ LEXICON_CHOOSE_AN_ACTION: dict[str, str] = {
     'uk': "<b>Будь ласка, оберіть дію 📋:</b>",
 }
 
+LEXICON_MESSAGE_SEND: dict[str, str] = {
+    'ru': "<b>Ваше сообщение отправлено в техническую поддержку. Мы свяжемся с вами в ближайшее время. 📩</b>",
+    'en': "<b>Your message has been sent to the technical support team. We will contact you shortly. 📩</b>",
+    'uk': "<b>Ваше повідомлення відправлено в технічну підтримку. Ми зв'яжемося з вами найближчим часом. 📩</b>"
+}
+
+""" Buttons """
+
+LEXICON_BUTTON_SUBMIT_AN_APPLICATION: dict[str, str] = {
+    'ru': "Отправить заявку 🚀",
+    'en': "Submit an application 🚀",
+    'uk': "Відправити заявку 🚀",
+}
+
+LEXICON_BUTTON_OUR_PRICE: dict[str, str] = {
+    'ru': "Наши цены 💵",
+    'en': "Our prices 💵",
+    'uk': "Наші ціни 💵",
+}
+
+LEXICON_BUTTON_TECHNICAL_SUPPORT: dict[str, str] = {
+    'ru': "Техническая поддержка 📱",
+    'en': "Technical support 📱",
+    'uk': "Технічна підтримка 📱",
+}
+
+LEXICON_BUTTON_SHARE_NUMBER: dict[str, str] = {
+    'ru': "Поделиться номером 📱",
+    'en': "Share number 📱",
+    'uk': "Поділитися номером 📱",
+}
+
+LEXICON_BUTTON_BACK_TO_MAIN_MENU: dict[str, str] = {
+    'ru': "🔙 Назад в главное меню",
+    'en': "🔙 Back to main menu",
+    'uk': "🔙 Назад до головного меню",
+}
+
+LEXICON_END_CONVERSATION_BUTTON: dict[str, str] = {
+    'ru': "Завершить разговор 🚪",
+    'en': "End conversation 🚪",
+    'uk': "Завершити розмову 🚪",
+}
