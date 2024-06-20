@@ -236,47 +236,50 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
 
         client = callback_data.client_id
         logger.info(f"Client: {client}")
-        product_names = await get_product_name_by_client(client)
+
         orders_number = await get_order_number_by_client(client)
+        product_names = await get_product_name_by_client(client)
         registration_date = await get_first_order_date_by_client(client)
 
-        for product in product_names:
-            asins = await get_asin(product)
-            logger.info(f"ASIN NAME: {asins}")
+        for order_number in orders_number:
+            for product in product_names:
+                asins = await get_asin(product)
+                fba = await get_fba_status(product)
+                fbm = await get_fbm_status(product)
+                number_of_units = await get_number_of_units(product)
+                comment = await get_comments(product)
+                set_flag = await get_set_info(product)
+                no_set = await get_not_set_info(product)
+                number_of_sets = await get_number_of_sets(product)
+                units_in_set = await number_of_units_in_set(product)
 
-            fba = await get_fba_status(product)
-            fbm = await get_fbm_status(product)
-            number_of_units = await get_number_of_units(product)
-            comment = await get_comments(product)
-            set_flag = await get_set_info(product)
-            no_set = await get_not_set_info(product)
-            number_of_sets = await get_number_of_sets(product)
-            units_in_set = await number_of_units_in_set(product)
+                for asin in asins:
+                    amount_due = await get_amount_due(asin)
+                    amount_paid = await get_amount_paid(asin)
+                    order_num = await get_order_number_by_asin(asin)
 
-            for asin in asins:
-                amount_due = await get_amount_due(asin)
-                orders_dict['Amount due'].append(amount_due)
-                amount_paid = await get_amount_paid(asin)
-                orders_dict['Amount paid'].append(amount_paid)
-                for order_number in orders_number:
-                    orders_dict['Order №'].append(order_number)
-                orders_dict['Clients'].append(client)
-                orders_dict['Product name'].append(product)
-                orders_dict['FBA'].append('Yes' if fba else 'No')
-                orders_dict['FBM'].append('Yes' if fbm else 'No')
-                orders_dict['ASIN'].append(asin)
-                orders_dict['Number of units'].append(number_of_units)
-                orders_dict['Comment'].append(comment if comment else 'None')
-                orders_dict['Set'].append('Yes' if set_flag else 'No')
-                orders_dict['No set'].append('Yes' if no_set else 'No')
-                orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
-                orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
-                orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
+                    orders_dict['Order №'].append(order_num[0])
+                    orders_dict['Clients'].append(client)
+                    orders_dict['Product name'].append(product)
+                    orders_dict['FBA'].append('Yes' if fba else 'No')
+                    orders_dict['FBM'].append('Yes' if fbm else 'No')
+                    orders_dict['ASIN'].append(asin)
+                    orders_dict['Number of units'].append(number_of_units)
+                    orders_dict['Comment'].append(comment if comment else 'None')
+                    orders_dict['Set'].append('Yes' if set_flag else 'No')
+                    orders_dict['No set'].append('Yes' if no_set else 'No')
+                    orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
+                    orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
+                    orders_dict['Amount due'].append(amount_due)
+                    orders_dict['Amount paid'].append(amount_paid)
+                    orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
 
         df = pd.DataFrame(orders_dict)
-        df.drop_duplicates(subset=['Product name', 'ASIN'], inplace=True)
-        logger.info("Dataframe created successfully.")
+        df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
+        df.sort_values(by='Clients', inplace=True)
+        df.sort_values(by='Order №', inplace=True)
 
+        # Specify the filename and create an Excel writer object
         file_name = f"excel_reports/{client}_statistics_{datetime.now(pytz.timezone('Europe/Kiev')).strftime('%d-%m-%Y')}.xlsx"
         writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
         df.to_excel(writer, index=False, sheet_name='Summary')
@@ -301,14 +304,13 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
 
         file = FSInputFile(file_name)
 
-        # delete please wait message
         await pls_wait_message.delete()
         await bot.send_document(chat_id=callback.from_user.id, document=file,
                                 reply_markup=set_back_to_menu(callback.from_user.language_code))
 
         logger.info("Statistics sent successfully.")
 
-    except ValueError as e:
+    except Exception as e:
         logger.error(f'Error in process_statistics_by_client_excel: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
@@ -350,6 +352,7 @@ async def process_statistics_by_all_clients_tg(callback: CallbackQuery):
 
         df = pd.DataFrame(orders_dict)
         df.drop_duplicates(subset=['Clients'], inplace=True)
+        df.sort_values(by='Clients', inplace=True)
         logger.info("Dataframe created successfully.")
 
         # Создание и сохранение изображения
@@ -454,6 +457,7 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
         df = pd.DataFrame(orders_dict)
         print(df)
         df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
+        df.sort_values(by='Order №', inplace=True)
         logger.info("Dataframe created successfully.")
 
         # Создание и сохранение изображения
