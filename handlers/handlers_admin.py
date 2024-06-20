@@ -18,7 +18,8 @@ from database.db_operations import get_clients_telegram_username, get_fba_status
     get_amount_paid, get_not_paid_orders_by_last_7_days, \
     get_clients_not_paid, get_products_not_paid, get_not_paid_orders_by_last_30_days, \
     get_not_paid_orders_by_last_half_year, get_not_paid_orders_by_last_1_year, get_first_order_date_by_client, \
-    get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client
+    get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_amount_paid_by_order_number, \
+    get_amount_due_by_order_number, get_order_number_by_asin
 from utils.helpers import load_data_to_excel
 from filters.is_admin import is_admin
 from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_SEND_XLSX_BY_ALL_CLIENTS, \
@@ -31,7 +32,6 @@ from aiogram.types import CallbackQuery, Message
 from create_bot import bot
 from xlsxwriter import Workbook
 
-
 from py_logger import get_logger
 from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_orders_not_paid_menu, set_choose_client, \
     set_choose_client_phone, set_choose_5_clients, set_back_to_menu
@@ -41,6 +41,45 @@ logger = get_logger(__name__)
 router = Router()
 tech_support_chat_id = os.getenv('CHAT_ID')
 
+
+async def create_statistics_image(df: pd.DataFrame, file_path: str):
+    # Вычисляем размеры фигуры
+    height_per_row = 0.5
+    width_per_col = 1.7
+    fig_height = max(4, len(df) * height_per_row)
+    fig_width = max(8, len(df.columns) * width_per_col)
+
+    # Создаем фигуру
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.axis('off')
+
+    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
+
+    # Настройка внешнего вида таблицы
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 1.5)
+
+    # Настройка стилей ячеек
+    cell_colors = ['#d4e157', '#ffeb3b', '#ffee58', '#ffeb3b']  # Цвета для ячеек
+    for (i, j), cell in table.get_celld().items():
+        cell.set_edgecolor('black')
+        if i == 0:
+            cell.set_facecolor('#6c757d')  # Цвет заголовка
+            cell.set_text_props(weight='bold', color='white')
+        elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] == 0:
+            cell.set_facecolor('red')  # Красный цвет для строк с amount_paid = 0
+            cell.set_text_props(color='black')
+        elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] < df.iloc[i - 1]['Amount due']:
+            cell.set_facecolor('orange')  # Оранжевый цвет для строк с amount_paid < amount_due
+            cell.set_text_props(color='black')
+        else:
+            cell.set_facecolor(cell_colors[i % len(cell_colors)])
+            cell.set_text_props(color='black')
+
+    # Сохраняем изображение
+    plt.savefig(file_path)
+    plt.close()
 
 # Handler for "/admin" command
 @router.message(Command(commands=["admin"]))
@@ -76,7 +115,8 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
         logger.info("Starting the creation of statistics by clients in Excel format.")
         await state.clear()
         await callback.message.delete()
-        await callback.message.answer(LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
+        pls_wait_message = await callback.message.answer(
+            LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
 
         orders_dict = {
             'Clients': [],
@@ -98,9 +138,9 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
             total_amount_paid = 0
 
             for order_number in orders_number:
-                amount_due = await get_amount_due(order_number)
+                amount_due = await get_amount_due_by_order_number(order_number)
                 total_amount_due += amount_due
-                amount_paid = await get_amount_paid(order_number)
+                amount_paid = await get_amount_paid_by_order_number(order_number)
                 total_amount_paid += amount_paid
 
             orders_dict['Clients'].append(client)
@@ -123,7 +163,8 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
         worksheet = writer.sheets['Summary']
 
         # Define cell formats
-        header_format = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC', 'border': 1})
+        header_format = workbook.add_format(
+            {'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC', 'border': 1})
         cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
 
         # Apply the formats to the columns
@@ -137,8 +178,9 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
 
         file = FSInputFile(file_name)
 
-        await bot.send_message(chat_id=callback.from_user.id, text=LEXICON_SEND_XLSX_BY_ALL_CLIENTS.get(callback.from_user.language_code, 'en'))
-        await bot.send_document(chat_id=callback.from_user.id, document=file, reply_markup=set_back_to_menu(callback.from_user.language_code))
+        await pls_wait_message.delete()
+        await bot.send_document(chat_id=callback.from_user.id, document=file,
+                                reply_markup=set_back_to_menu(callback.from_user.language_code))
 
         logger.info("Statistics sent successfully.")
 
@@ -146,9 +188,11 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
         logger.error(f'Error in process_statistics_by_clients_excel: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
+
 @router.callback_query(AdminCallbackFactory.filter(F.action == "statistics_by_client_excel"))
 async def process_statistics_by_client_excel(callback: CallbackQuery, state: FSMContext):
     try:
+        await callback.message.delete()
         clients = await get_clients_telegram_username()
         # get unique clients
         clients = list(set(clients))
@@ -162,14 +206,15 @@ async def process_statistics_by_client_excel(callback: CallbackQuery, state: FSM
 
 
 @router.callback_query(AdminCallbackFactory.filter(F.action == "choose_client"))
-async def process_statistics_by_one_client_excel(callback: CallbackQuery,
-                                                 callback_data: AdminStates, state: FSMContext):
+async def process_statistics_by_one_client_excel(callback: CallbackQuery, callback_data: AdminStates,
+                                                 state: FSMContext):
     try:
         logger.info("Creating statistics by clients in Excel format")
 
         await state.clear()
         await callback.message.delete()
-        await callback.message.answer(LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
+        pls_wait_message = await callback.message.answer(
+            LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
 
         orders_dict = {
             'Order №': [],
@@ -195,32 +240,28 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery,
         orders_number = await get_order_number_by_client(client)
         registration_date = await get_first_order_date_by_client(client)
 
-        for product_name in product_names:
-            asins = await get_asin(product_name)
-            if asins is None:
-                logger.error(f"No ASINs found for product: {product_name}")
-                asins = []  # Ensure asins is always a list to prevent TypeError during iteration
+        for product in product_names:
+            asins = await get_asin(product)
+            logger.info(f"ASIN NAME: {asins}")
+
+            fba = await get_fba_status(product)
+            fbm = await get_fbm_status(product)
+            number_of_units = await get_number_of_units(product)
+            comment = await get_comments(product)
+            set_flag = await get_set_info(product)
+            no_set = await get_not_set_info(product)
+            number_of_sets = await get_number_of_sets(product)
+            units_in_set = await number_of_units_in_set(product)
 
             for asin in asins:
-                print('Asin', asin)
                 amount_due = await get_amount_due(asin)
                 orders_dict['Amount due'].append(amount_due)
                 amount_paid = await get_amount_paid(asin)
                 orders_dict['Amount paid'].append(amount_paid)
-            fba = await get_fba_status(product_name)
-            fbm = await get_fbm_status(product_name)
-            number_of_units = await get_number_of_units(product_name)
-            comment = await get_comments(product_name)
-            set_flag = await get_set_info(product_name)
-            no_set = await get_not_set_info(product_name)
-            number_of_sets = await get_number_of_sets(product_name)
-            units_in_set = await number_of_units_in_set(product_name)
-
-            for asin in asins:
                 for order_number in orders_number:
                     orders_dict['Order №'].append(order_number)
                 orders_dict['Clients'].append(client)
-                orders_dict['Product name'].append(product_name)
+                orders_dict['Product name'].append(product)
                 orders_dict['FBA'].append('Yes' if fba else 'No')
                 orders_dict['FBM'].append('Yes' if fbm else 'No')
                 orders_dict['ASIN'].append(asin)
@@ -259,10 +300,11 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery,
         writer.close()
 
         file = FSInputFile(file_name)
-        await bot.send_message(chat_id=callback.from_user.id,
-                               text=LEXICON_SEND_XLSX_BY_CLIENT.get(callback.from_user.language_code, 'en').format(
-                                   client=client))
-        await bot.send_document(chat_id=callback.from_user.id, document=file, reply_markup=set_back_to_menu(callback.from_user.language_code))
+
+        # delete please wait message
+        await pls_wait_message.delete()
+        await bot.send_document(chat_id=callback.from_user.id, document=file,
+                                reply_markup=set_back_to_menu(callback.from_user.language_code))
 
         logger.info("Statistics sent successfully.")
 
@@ -270,86 +312,55 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery,
         logger.error(f'Error in process_statistics_by_client_excel: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
+
 @router.callback_query(AdminCallbackFactory.filter(F.action == "statistics_by_clients_tg"))
 async def process_statistics_by_all_clients_tg(callback: CallbackQuery):
     try:
         logger.info("Creating statistics by clients in Telegram format using matplotlib")
+        await callback.message.delete()
+
+        pls_wait_message = await callback.message.answer(
+            LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
 
         orders_dict = {
             'Clients': [],
-            'Product_name': [],
-            'FBA': [],
-            'FBM': [],
-            'ASIN': [],
-            'Number_of_units': [],
-            'Comment': [],
-            'Set': [],
-            'No_set': [],
-            'Number_of_sets': [],
-            'Units_in_set': [],
-            'Amount_due': [],
-            'Amount_paid': []
+            'Number of units': [],
+            'Amount due': [],
+            'Amount paid': []
         }
+
         clients = await get_clients_telegram_username()
 
         for client in clients:
-            product_names = await get_product_name_by_client(client)
-            for product_name in product_names:
-                asins = await get_asin(product_name)
-                for asin in asins:
-                    amount_due = await get_amount_due(asin)
-                    orders_dict['Amount_due'].append(amount_due)
-                    amount_paid = await get_amount_paid(asin)
-                    orders_dict['Amount_paid'].append(amount_paid)
-                fba = await get_fba_status(product_name)
-                fbm = await get_fbm_status(product_name)
-                number_of_units = await get_number_of_units(product_name)
-                comment = await get_comments(product_name)
-                set_flag = await get_set_info(product_name)
-                no_set = await get_not_set_info(product_name)
-                number_of_sets = await get_number_of_sets(product_name)
-                units_in_set = await number_of_units_in_set(product_name)
+            orders_number = await get_order_number_by_client(client)
+            units = await sum_units_by_client(client)
+            total_amount_due = 0
+            total_amount_paid = 0
 
-                for asin in asins:
-                    orders_dict['Clients'].append(client)
-                    orders_dict['Product_name'].append(product_name)
-                    orders_dict['FBA'].append('Yes' if fba else 'No')
-                    orders_dict['FBM'].append('Yes' if fbm else 'No')
-                    orders_dict['ASIN'].append(asin)
-                    orders_dict['Number_of_units'].append(number_of_units)
-                    orders_dict['Comment'].append(comment if comment else 'None')
-                    orders_dict['Set'].append('Yes' if set_flag else 'No')
-                    orders_dict['No_set'].append('Yes' if no_set else 'No')
-                    orders_dict['Number_of_sets'].append(number_of_sets if number_of_sets else 0)
-                    orders_dict['Units_in_set'].append(units_in_set if units_in_set else 0)
+            for order_number in orders_number:
+                amount_due = await get_amount_due_by_order_number(order_number)
+                total_amount_due += amount_due
+                amount_paid = await get_amount_paid_by_order_number(order_number)
+                total_amount_paid += amount_paid
+
+            orders_dict['Clients'].append(client)
+            orders_dict['Number of units'].append(units)
+            orders_dict['Amount due'].append(total_amount_due)
+            orders_dict['Amount paid'].append(total_amount_paid)
 
         df = pd.DataFrame(orders_dict)
-        df.drop_duplicates(subset=['Clients', 'Product_name', 'ASIN'], inplace=True)
+        df.drop_duplicates(subset=['Clients'], inplace=True)
         logger.info("Dataframe created successfully.")
 
-        # Вычисляем размеры фигуры
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        # Создаем фигуру
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        # Сохраняем изображение
-        filepath = 'images_reports/all_clients_statistics.png'
-        plt.savefig(filepath)
-        plt.close()
+        # Создание и сохранение изображения
+        file_path = f'images_reports/all_clients_statistics.png'
+        await create_statistics_image(df, file_path)
 
         # Отправка сообщения
-        await bot.send_message(chat_id=tech_support_chat_id, text=LEXICON_SEND_PHOTO_BY_ALL_CLIENTS.get(
-            callback.from_user.language_code, 'en'))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
+        await bot.send_document(chat_id=callback.from_user.id, document=FSInputFile(file_path),
+                                reply_markup=set_back_to_menu(callback.from_user.language_code))
+        await pls_wait_message.delete()
+        await callback.answer(LEXICON_STATISTICS_SEND_SUCCESS.get(callback.from_user.language_code, 'en'))
 
     except Exception as e:
         logger.error(f'Error in process_statistics_by_clients_tg: {e}')
@@ -359,6 +370,8 @@ async def process_statistics_by_all_clients_tg(callback: CallbackQuery):
 @router.callback_query(AdminCallbackFactory.filter(F.action == "statistics_by_client_tg"))
 async def process_statistics_by_client_tg(callback: CallbackQuery, state: FSMContext):
     try:
+        await callback.message.delete()
+
         clients = await get_clients_telegram_username()
         # get unique clients
         clients = list(set(clients))
@@ -372,89 +385,87 @@ async def process_statistics_by_client_tg(callback: CallbackQuery, state: FSMCon
 
 
 @router.callback_query(AdminCallbackFactory.filter(F.action == "choose_client_phone"))
-async def process_statistics_by_one_client_tg(callback: CallbackQuery,
-                                              callback_data: AdminStates, state: FSMContext):
+async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_data: AdminStates, state: FSMContext):
     try:
         logger.info("Creating statistics by clients in Telegram format using matplotlib")
 
+        pls_wait_message = await callback.message.answer(
+            LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
+
         await callback.message.delete()
         orders_dict = {
+            'Order №': [],
             'Clients': [],
-            'Product_name': [],
+            'Product name': [],
             'FBA': [],
             'FBM': [],
             'ASIN': [],
-            'Number_of_units': [],
+            'Number of units': [],
             'Comment': [],
             'Set': [],
-            'No_set': [],
-            'Number_of_sets': [],
-            'Units_in_set': [],
-            'Amount_due': [],
-            'Amount_paid': []
+            'No set': [],
+            'Number of sets': [],
+            'Units in set': [],
+            'Amount due': [],
+            'Amount paid': [],
+            'Registration date': [],
         }
 
         client = callback_data.client_id
         logger.info(f"Client: {client}")
+
+        orders_number = await get_order_number_by_client(client)
         product_names = await get_product_name_by_client(client)
+        registration_date = await get_first_order_date_by_client(client)
 
-        for product_name in product_names:
-            asins = await get_asin(product_name)
-            for asin in asins:
-                amount_due = await get_amount_due(asin)
-                orders_dict['Amount_due'].append(amount_due)
-                amount_paid = await get_amount_paid(asin)
-                orders_dict['Amount_paid'].append(amount_paid)
-            fba = await get_fba_status(product_name)
-            fbm = await get_fbm_status(product_name)
-            number_of_units = await get_number_of_units(product_name)
-            comment = await get_comments(product_name)
-            set_flag = await get_set_info(product_name)
-            no_set = await get_not_set_info(product_name)
-            number_of_sets = await get_number_of_sets(product_name)
-            units_in_set = await number_of_units_in_set(product_name)
+        for order_number in orders_number:
+            for product in product_names:
+                asins = await get_asin(product)
+                fba = await get_fba_status(product)
+                fbm = await get_fbm_status(product)
+                number_of_units = await get_number_of_units(product)
+                comment = await get_comments(product)
+                set_flag = await get_set_info(product)
+                no_set = await get_not_set_info(product)
+                number_of_sets = await get_number_of_sets(product)
+                units_in_set = await number_of_units_in_set(product)
 
-            for asin in asins:
-                orders_dict['Clients'].append(client)
-                orders_dict['Product_name'].append(product_name)
-                orders_dict['FBA'].append('Yes' if fba else 'No')
-                orders_dict['FBM'].append('Yes' if fbm else 'No')
-                orders_dict['ASIN'].append(asin)
-                orders_dict['Number_of_units'].append(number_of_units)
-                orders_dict['Comment'].append(comment if comment else 'None')
-                orders_dict['Set'].append('Yes' if set_flag else 'No')
-                orders_dict['No_set'].append('Yes' if no_set else 'No')
-                orders_dict['Number_of_sets'].append(number_of_sets if number_of_sets else 0)
-                orders_dict['Units_in_set'].append(units_in_set if units_in_set else 0)
+                for asin in asins:
+                    amount_due = await get_amount_due(asin)
+                    amount_paid = await get_amount_paid(asin)
+                    order_num = await get_order_number_by_asin(asin)
+
+                    orders_dict['Order №'].append(order_num[0])
+                    orders_dict['Clients'].append(client)
+                    orders_dict['Product name'].append(product)
+                    orders_dict['FBA'].append('Yes' if fba else 'No')
+                    orders_dict['FBM'].append('Yes' if fbm else 'No')
+                    orders_dict['ASIN'].append(asin)
+                    orders_dict['Number of units'].append(number_of_units)
+                    orders_dict['Comment'].append(comment if comment else 'None')
+                    orders_dict['Set'].append('Yes' if set_flag else 'No')
+                    orders_dict['No set'].append('Yes' if no_set else 'No')
+                    orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
+                    orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
+                    orders_dict['Amount due'].append(amount_due)
+                    orders_dict['Amount paid'].append(amount_paid)
+                    orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
 
         df = pd.DataFrame(orders_dict)
-        df.drop_duplicates(subset=['Product_name', 'ASIN'], inplace=True)
+        print(df)
+        df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
         logger.info("Dataframe created successfully.")
 
-        # Вычисляем размеры фигуры
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        # Создаем фигуру
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        # Сохраняем изображение
-        filepath = f'images_reports/{client}_statistics.png'
-        plt.savefig(filepath)
-        plt.close()
+        # Создание и сохранение изображения
+        file_path = f'images_reports/{client}_statistics.png'
+        await create_statistics_image(df, file_path)
 
         # Отправка сообщения
-        await bot.send_message(chat_id=tech_support_chat_id,
-                               text=LEXICON_SEND_PHOTO_BY_CLIENT.get(callback.from_user.language_code,
-                                                                     'en').format(client=client))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
+        await bot.send_document(chat_id=callback.from_user.id, document=FSInputFile(file_path),
+                                reply_markup=set_back_to_menu(callback.from_user.language_code))
+        await pls_wait_message.delete()
+
+        logger.info("Statistics sent successfully.")
 
     except Exception as e:
         logger.error(f'Error in process_statistics_by_client_tg: {e}')

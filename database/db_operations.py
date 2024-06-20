@@ -184,15 +184,23 @@ async def get_order_number_by_client(telegram_username):
                      .where(Clients.telegram_id == user_id))
             order_numbers = [order.order_number for order in query]
 
-            # logger.info(f"All order numbers by client {telegram_username}: {order_numbers}")
             return order_numbers
-        # else:
-        #     logger.error(f"No user found with username: {telegram_username}")
-        #     return []
+
     except Exception as e:
         logger.error(f"Error while getting all order numbers by client from database: {e}")
         return []
 
+
+async def get_order_number_by_asin(asin):
+    try:
+        query = Form.select(Form.order_number).where(Form.ASIN == asin)
+        order_numbers = [order.order_number for order in query]
+
+        return order_numbers
+
+    except Exception as e:
+        logger.error(f"Error while getting all order numbers by ASIN from database: {e}")
+        return []
 
 async def get_clients_telegram_username():
     try:
@@ -293,14 +301,9 @@ async def get_asin(product_name):
     try:
         # Використовуємо select().where() для отримання всіх відповідних записів
         forms = Form.select().where(Form.product_name == product_name)
-        asins = {form.ASIN for form in forms}  # Створюємо множину унікальних ASIN
+        asins = {form.ASIN for form in forms}
 
-        # if asins:
-        #     logger.info(f"Product name: {product_name}, ASINs: {asins}")
-        #     return asins
-        # else:
-        #     logger.error(f"No ASINs found for product name: {product_name}")
-        #     return None
+        return asins
     except Exception as e:
         logger.error(f"Error while getting ASINs for product name {product_name}: {e}")
         return None
@@ -378,32 +381,46 @@ async def number_of_units_in_set(product_name):
 
 """Payment info"""
 
+async def get_amount_due(asin):
+    try:
+        form = Form.get(Form.ASIN == asin)
+        amount_due = Payment.select(Payment.amount_due).where(Payment.form_id == form.id).scalar()
 
-async def get_amount_due(order_number):
+        return amount_due
+    except Exception as e:
+        logger.error(f"Exception in get_amount_due for {asin}: {str(e)}")
+        return 0
+
+async def get_amount_due_by_order_number(order_number):
     try:
         form = Form.get(Form.order_number == order_number)
         amount_due = Payment.select(Payment.amount_due).where(Payment.form_id == form.id).scalar()
-        if amount_due is None or amount_due == 0:
-            logger.error(f"No amount due found for order number: {order_number}")
-            return 0
+
         return amount_due
     except Exception as e:
         logger.error(f"Exception in get_amount_due for {order_number}: {str(e)}")
         return 0
 
 
-async def get_amount_paid(order_number):
+async def get_amount_paid(asin):
+    try:
+        form = Form.get(Form.ASIN == asin)
+        amount_paid = Payment.select(Payment.amount_paid).where(Payment.form_id == form.id).scalar()
+
+        return amount_paid
+    except Exception as e:
+        logger.error(f"Exception in get_amount_paid for {asin}: {str(e)}")
+        return 0
+
+async def get_amount_paid_by_order_number(order_number):
     try:
         form = Form.get(Form.order_number == order_number)
         amount_paid = Payment.select(Payment.amount_paid).where(Payment.form_id == form.id).scalar()
-        if amount_paid is None:
-            logger.error(f"No amount paid found for order number: {order_number}")
-            return 0
+
         return amount_paid
     except Exception as e:
         logger.error(f"Exception in get_amount_paid for {order_number}: {str(e)}")
         return 0
-
 
 """Look for clients"""
 
