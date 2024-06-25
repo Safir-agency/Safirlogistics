@@ -22,10 +22,10 @@ def set_admin_menu(lang) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=look_for_client_text,
                                      callback_data=AdminCallbackFactory(action="look_for_client").pack())
             ],
-            [
-                InlineKeyboardButton(text=look_for_order_not_paid_text,
-                                     callback_data=AdminCallbackFactory(action="look_for_order_not_paid").pack()),
-            ]
+            # [
+            #     InlineKeyboardButton(text=look_for_order_not_paid_text,
+            #                          callback_data=AdminCallbackFactory(action="look_for_order_not_paid").pack()),
+            # ]
         ]
     )
     return keyboard
@@ -127,35 +127,35 @@ def set_choose_client_phone(clients: List[str]) -> InlineKeyboardMarkup:
     )
     return keyboard
 
-
-def set_orders_not_paid_menu(lang) -> InlineKeyboardMarkup:
-    by_7_days = LEXICON_BY_LAST_7_DAYS.get(lang, 'en')
-    by_30_days = LEXICON_BY_LAST_30_DAYS.get(lang, 'en')
-    by_last_half_year = LEXICON_LAST_HALF_YEAR.get(lang, 'en')
-    by_last_1_year = LEXICON_LAST_1_YEAR.get(lang, 'en')
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=by_7_days,
-                                     callback_data=AdminCallbackFactory(action="orders_by_7_days_not_paid").pack()),
-                InlineKeyboardButton(text=by_30_days,
-                                     callback_data=AdminCallbackFactory(action="orders_by_30_days_not_paid").pack())
-            ],
-            [
-                InlineKeyboardButton(text=by_last_half_year,
-                                     callback_data=AdminCallbackFactory(action="orders_by_last_half_year_not_paid").pack()),
-                InlineKeyboardButton(text=by_last_1_year,
-                                     callback_data=AdminCallbackFactory(action="orders_by_last_1_year_not_paid").pack())
-            ],
-            [
-                InlineKeyboardButton(text="🔙 Back",
-                                     callback_data=AdminCallbackFactory(action="back_to_statistics_not_paid").pack())
-            ]
-        ]
-    )
-
-    return keyboard
+#
+# def set_orders_not_paid_menu(lang) -> InlineKeyboardMarkup:
+#     by_7_days = LEXICON_BY_LAST_7_DAYS.get(lang, 'en')
+#     by_30_days = LEXICON_BY_LAST_30_DAYS.get(lang, 'en')
+#     by_last_half_year = LEXICON_LAST_HALF_YEAR.get(lang, 'en')
+#     by_last_1_year = LEXICON_LAST_1_YEAR.get(lang, 'en')
+#
+#     keyboard = InlineKeyboardMarkup(
+#         inline_keyboard=[
+#             [
+#                 InlineKeyboardButton(text=by_7_days,
+#                                      callback_data=AdminCallbackFactory(action="orders_by_7_days_not_paid").pack()),
+#                 InlineKeyboardButton(text=by_30_days,
+#                                      callback_data=AdminCallbackFactory(action="orders_by_30_days_not_paid").pack())
+#             ],
+#             [
+#                 InlineKeyboardButton(text=by_last_half_year,
+#                                      callback_data=AdminCallbackFactory(action="orders_by_last_half_year_not_paid").pack()),
+#                 InlineKeyboardButton(text=by_last_1_year,
+#                                      callback_data=AdminCallbackFactory(action="orders_by_last_1_year_not_paid").pack())
+#             ],
+#             [
+#                 InlineKeyboardButton(text="🔙 Back",
+#                                      callback_data=AdminCallbackFactory(action="back_to_statistics_not_paid").pack())
+#             ]
+#         ]
+#     )
+#
+#     return keyboard
 
 
 # Button for admin to answer to client

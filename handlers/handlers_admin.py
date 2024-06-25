@@ -15,25 +15,25 @@ from database.db_operations import get_clients_telegram_username, get_fba_status
     get_fbm_status, get_asin, get_product_name_by_client, get_number_of_units, get_comments, get_set_info, \
     get_not_set_info, get_number_of_sets, number_of_units_in_set, get_all_clients_sorted_by_recent_form, \
     get_last_form_by_client, get_debt_by_client, get_amount_due_by_client, get_amount_paid_by_client, get_amount_due, \
-    get_amount_paid, get_not_paid_orders_by_last_7_days, \
+    get_amount_paid, \
     get_clients_not_paid, get_products_not_paid, get_not_paid_orders_by_last_30_days, \
     get_not_paid_orders_by_last_half_year, get_not_paid_orders_by_last_1_year, get_first_order_date_by_client, \
     get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_amount_paid_by_order_number, \
-    get_amount_due_by_order_number, get_order_number_by_asin
+    get_amount_due_by_order_number, get_order_number_by_asin, get_amount_not_paid_by_last_7_days_by_client
 from utils.helpers import load_data_to_excel
 from filters.is_admin import is_admin
 from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_SEND_XLSX_BY_ALL_CLIENTS, \
     LEXICON_SEND_XLSX_BY_CLIENT, LEXICON_CHOOSE_CLIENT, LEXICON_SEND_PHOTO_BY_ALL_CLIENTS, LEXICON_SEND_PHOTO_BY_CLIENT, \
     LEXICON_NO_CLIENTS, LEXICON_NEXT_5_CLIENTS, LEXICON_CLIENT_HAS_NO_DEBT, LEXICON_CLIENT_HAS_DEBT, \
     LEXICON_NOT_PAID_LAST_7_DAYS, LEXICON_NOT_PAID_LAST_30_DAYS, LEXICON_NOT_PAID_LAST_HALF_YEAR, \
-    LEXICON_NOT_PAID_LAST_1_YEAR, LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT
+    LEXICON_NOT_PAID_LAST_1_YEAR, LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT, LEXICON_NO_NOT_PAID_ORDERS
 from states.states_admin import AdminCallbackFactory, AdminStates
 from aiogram.types import CallbackQuery, Message
 from create_bot import bot
 from xlsxwriter import Workbook
 
 from py_logger import get_logger
-from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_orders_not_paid_menu, set_choose_client, \
+from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_choose_client, \
     set_choose_client_phone, set_choose_5_clients, set_back_to_menu
 
 logger = get_logger(__name__)
@@ -80,6 +80,7 @@ async def create_statistics_image(df: pd.DataFrame, file_path: str):
     # Сохраняем изображение
     plt.savefig(file_path)
     plt.close()
+
 
 # Handler for "/admin" command
 @router.message(Command(commands=["admin"]))
@@ -687,244 +688,3 @@ async def back_to_admin_menu_2(callback: CallbackQuery):
         logger.error(f'Error in back_to_admin_menu_2: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
-
-"""Look for order not paid"""
-
-
-@router.callback_query(AdminCallbackFactory.filter(F.action == 'orders_by_7_days_not_paid'))
-async def not_paid_orders_last_7_days(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-
-        # Query to get orders not paid in the last 7 days
-        orders_not_paid = await get_not_paid_orders_by_last_7_days()
-        product_name = await get_products_not_paid()
-        client = await get_clients_not_paid()
-
-        # Initialize lists for DataFrame
-        product_names_list = []
-        clients_list = []
-        not_paid_amounts_list = []
-
-        # Loop through each item, assuming all lists are correctly aligned
-        for i in range(len(orders_not_paid)):
-            product_names_list.append(product_name[i]['product_name'])
-            clients_list.append(client[i]['telegram_username'])
-            amount_due = orders_not_paid[i]['amount_due']
-            amount_paid = orders_not_paid[i]['amount_paid']
-            not_paid = amount_due - amount_paid
-            not_paid_amounts_list.append(not_paid)
-
-        # Creating DataFrame from the lists
-        df = pd.DataFrame({
-            'Product_name': product_names_list,
-            'Client': clients_list,
-            'Not_paid': not_paid_amounts_list
-        })
-
-        # Code for plotting (remaining the same)
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        filepath = 'images_reports/not_paid_orders_last_7_days.png'
-        plt.savefig(filepath)
-        plt.close()
-
-        await bot.send_message(chat_id=tech_support_chat_id, text=LEXICON_NOT_PAID_LAST_7_DAYS.get(
-            callback.from_user.language_code, 'en'))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
-        await callback.message.answer(LEXICON_STATISTICS_SEND_SUCCESS.get(callback.from_user.language_code, 'en'),
-                                      reply_markup=set_admin_menu(callback.from_user.language_code))
-
-
-    except Exception as e:
-        logger.error(f'Error in not_paid_orders_last_7_days: {e}')
-        await callback.answer("An error occurred. Please try again later.")
-
-
-@router.callback_query(AdminCallbackFactory.filter(F.action == 'orders_by_30_days_not_paid'))
-async def not_paid_orders_last_30_days(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-
-        # Query to get orders not paid in the last 30 days
-        orders_not_paid = await get_not_paid_orders_by_last_30_days()
-        product_name = await get_products_not_paid()
-        client = await get_clients_not_paid()
-
-        # Initialize lists for DataFrame
-        product_names_list = []
-        clients_list = []
-        not_paid_amounts_list = []
-
-        # Loop through each item, assuming all lists are correctly aligned
-        for i in range(len(orders_not_paid)):
-            product_names_list.append(product_name[i]['product_name'])
-            clients_list.append(client[i]['telegram_username'])
-            amount_due = orders_not_paid[i]['amount_due']
-            amount_paid = orders_not_paid[i]['amount_paid']
-            not_paid = amount_due - amount_paid
-            not_paid_amounts_list.append(not_paid)
-
-        # Creating DataFrame from the lists
-        df = pd.DataFrame({
-            'Product_name': product_names_list,
-            'Client': clients_list,
-            'Not_paid': not_paid_amounts_list
-        })
-
-        # Code for plotting (remaining the same)
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        filepath = 'images_reports/not_paid_orders_last_30_days.png'
-        plt.savefig(filepath)
-        plt.close()
-
-        await bot.send_message(chat_id=tech_support_chat_id, text=LEXICON_NOT_PAID_LAST_30_DAYS.get(
-            callback.from_user.language_code, 'en'))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
-        await callback.message.answer(LEXICON_STATISTICS_SEND_SUCCESS.get(callback.from_user.language_code, 'en'),
-                                      reply_markup=set_admin_menu(callback.from_user.language_code))
-
-    except Exception as e:
-        logger.error(f'Error in not_paid_orders_last_30_days: {e}')
-        await callback.answer("An error occurred. Please try again later.")
-
-
-@router.callback_query(AdminCallbackFactory.filter(F.action == 'orders_by_last_half_year_not_paid'))
-async def not_paid_orders_last_half_year(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-
-        # Query to get orders not paid in the last half year
-        orders_not_paid = await get_not_paid_orders_by_last_half_year()
-        product_name = await get_products_not_paid()
-        client = await get_clients_not_paid()
-
-        # Initialize lists for DataFrame
-        product_names_list = []
-        clients_list = []
-        not_paid_amounts_list = []
-
-        # Loop through each item, assuming all lists are correctly aligned
-        for i in range(len(orders_not_paid)):
-            product_names_list.append(product_name[i]['product_name'])
-            clients_list.append(client[i]['telegram_username'])
-            amount_due = orders_not_paid[i]['amount_due']
-            amount_paid = orders_not_paid[i]['amount_paid']
-            not_paid = amount_due - amount_paid
-            not_paid_amounts_list.append(not_paid)
-
-        # Creating DataFrame from the lists
-        df = pd.DataFrame({
-            'Product_name': product_names_list,
-            'Client': clients_list,
-            'Not_paid': not_paid_amounts_list
-        })
-
-        # Code for plotting (remaining the same)
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        filepath = 'images_reports/not_paid_orders_last_half_year.png'
-        plt.savefig(filepath)
-        plt.close()
-
-        await bot.send_message(chat_id=tech_support_chat_id, text=LEXICON_NOT_PAID_LAST_HALF_YEAR.get(
-            callback.from_user.language_code, 'en'))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
-        await callback.message.answer(LEXICON_STATISTICS_SEND_SUCCESS.get(callback.from_user.language_code, 'en'),
-                                      reply_markup=set_admin_menu(callback.from_user.language_code))
-    except Exception as e:
-        logger.error(f'Error in not_paid_orders_last_half_year: {e}')
-        await callback.answer("An error occurred. Please try again later.")
-
-
-@router.callback_query(AdminCallbackFactory.filter(F.action == 'orders_by_last_1_year_not_paid'))
-async def not_paid_orders_last_1_year(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-
-        # Query to get orders not paid in the last 1 year
-        orders_not_paid = await get_not_paid_orders_by_last_1_year()
-        product_name = await get_products_not_paid()
-        client = await get_clients_not_paid()
-
-        # Initialize lists for DataFrame
-        product_names_list = []
-        clients_list = []
-        not_paid_amounts_list = []
-
-        # Loop through each item, assuming all lists are correctly aligned
-        for i in range(len(orders_not_paid)):
-            product_names_list.append(product_name[i]['product_name'])
-            clients_list.append(client[i]['telegram_username'])
-            amount_due = orders_not_paid[i]['amount_due']
-            amount_paid = orders_not_paid[i]['amount_paid']
-            not_paid = amount_due - amount_paid
-            not_paid_amounts_list.append(not_paid)
-
-        # Creating DataFrame from the lists
-        df = pd.DataFrame({
-            'Product_name': product_names_list,
-            'Client': clients_list,
-            'Not_paid': not_paid_amounts_list
-        })
-
-        # Code for plotting (remaining the same)
-        height_per_row = 0.5
-        width_per_col = 1.7
-        fig_height = max(4, len(df) * height_per_row)
-        fig_width = max(8, len(df.columns) * width_per_col)
-
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-        ax.axis('off')
-
-        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        filepath = 'images_reports/not_paid_orders_last_1_year.png'
-        plt.savefig(filepath)
-        plt.close()
-
-        await bot.send_message(chat_id=tech_support_chat_id, text=LEXICON_NOT_PAID_LAST_1_YEAR.get(
-            callback.from_user.language_code, 'en'))
-        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(filepath))
-        await callback.message.answer(LEXICON_STATISTICS_SEND_SUCCESS.get(callback.from_user.language_code, 'en'),
-                                      reply_markup=set_admin_menu(callback.from_user.language_code))
-    except Exception as e:
-        logger.error(f'Error in not_paid_orders_last_1_year: {e}')
-        await callback.answer("An error occurred. Please try again later.")

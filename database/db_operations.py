@@ -202,6 +202,7 @@ async def get_order_number_by_asin(asin):
         logger.error(f"Error while getting all order numbers by ASIN from database: {e}")
         return []
 
+
 async def get_clients_telegram_username():
     try:
         # Get all clients from database and their Telegram usernames
@@ -321,15 +322,16 @@ async def get_number_of_units(product_name):
 async def sum_units_by_client(telegram_username):
     try:
         total_units_by_client = (Form.select(fn.SUM(Form.number_of_units).alias('total_units'))
-                                    .join(Clients, on=(Clients.form_id == Form.id))
-                                    .join(TelegramUsers, on=(Clients.telegram_id == TelegramUsers.id))
-                                    .where(TelegramUsers.telegram_username == telegram_username)
-                                    .scalar())
+                                 .join(Clients, on=(Clients.form_id == Form.id))
+                                 .join(TelegramUsers, on=(Clients.telegram_id == TelegramUsers.id))
+                                 .where(TelegramUsers.telegram_username == telegram_username)
+                                 .scalar())
 
         return total_units_by_client
     except Exception as e:
         logger.error(f"Error while getting total units by client from database: {e}")
         return 0
+
 
 async def get_comments(product_name):
     try:
@@ -381,6 +383,7 @@ async def number_of_units_in_set(product_name):
 
 """Payment info"""
 
+
 async def get_amount_due(asin):
     try:
         form = Form.get(Form.ASIN == asin)
@@ -390,6 +393,7 @@ async def get_amount_due(asin):
     except Exception as e:
         logger.error(f"Exception in get_amount_due for {asin}: {str(e)}")
         return 0
+
 
 async def get_amount_due_by_order_number(order_number):
     try:
@@ -412,6 +416,7 @@ async def get_amount_paid(asin):
         logger.error(f"Exception in get_amount_paid for {asin}: {str(e)}")
         return 0
 
+
 async def get_amount_paid_by_order_number(order_number):
     try:
         form = Form.get(Form.order_number == order_number)
@@ -421,6 +426,7 @@ async def get_amount_paid_by_order_number(order_number):
     except Exception as e:
         logger.error(f"Exception in get_amount_paid for {order_number}: {str(e)}")
         return 0
+
 
 """Look for clients"""
 
@@ -560,24 +566,35 @@ async def get_amount_paid_by_client(telegram_username):
 """Look for orders not paid"""
 
 
-async def get_not_paid_orders_by_last_7_days():
+async def get_amount_not_paid_by_last_7_days_by_client(telegram_username):
     try:
-        # Query the database for all unpaid orders from the last 7 days (is_paid = False)
-        not_paid_orders = (Payment.select(Payment.amount_due, Payment.amount_paid, Payment.is_paid,
-                                          Clients.telegram_id.alias('client_id'), Form.product_name)
-                           .join(Clients)
-                           .join(Form)
-                           .join(TelegramUsers, on=(Clients.telegram_id == TelegramUsers.id))
-                           .where(Payment.is_paid == False,
-                                  Payment.created_at >= datetime.now() - timedelta(days=7))).dicts()
+        user_id = TelegramUsers.select(TelegramUsers.id).where(
+            TelegramUsers.telegram_username == telegram_username).scalar()
 
-        for order in not_paid_orders:
-            print(order)
+        if user_id:
+            query = (Payment.select(Payment.amount_due, Payment.amount_paid)
+                     .join(Clients)
+                     .join(TelegramUsers)
+                     .where(TelegramUsers.id == user_id,
+                            Payment.is_paid == False,
+                            Payment.created_at >= datetime.now() - timedelta(days=7))
+                     .order_by(Payment.created_at.desc())
+                     .limit(1))
+            if query.exists():
+                amount_due = query[0].amount_due
+                amount_paid = query[0].amount_paid
+                debt = amount_due - amount_paid
+                logger.info(f"Amount not paid by client {telegram_username} for the last 7 days: {debt}")
 
-        return not_paid_orders
-
+                return debt
+            else:
+                logger.info(f"Client {telegram_username} has no debt for the last 7 days.")
+                return 0
+        else:
+            logger.error(f"No user found with username: {telegram_username}")
+            return None
     except Exception as e:
-        logger.error(f"Error while getting not paid orders from database: {e}")
+        logger.error(f"Error while getting amount not paid by client for the last 7 days from database: {e}")
         return None
 
 
@@ -594,6 +611,10 @@ async def get_not_paid_orders_by_last_30_days():
 
         for order in not_paid_orders:
             print(order)
+
+        if not not_paid_orders:
+            logger.info("No unpaid orders for the last 30 days")
+            return ''
 
         return not_paid_orders
 
@@ -616,6 +637,10 @@ async def get_not_paid_orders_by_last_half_year():
         for order in not_paid_orders:
             print(order)
 
+        if not not_paid_orders:
+            logger.info("No unpaid orders for the last half year")
+            return ''
+
         return not_paid_orders
 
     except Exception as e:
@@ -637,6 +662,10 @@ async def get_not_paid_orders_by_last_1_year():
         for order in not_paid_orders:
             print(order)
 
+        if not not_paid_orders:
+            logger.info("No unpaid orders for the last 1 year")
+            return ''
+
         return not_paid_orders
 
     except Exception as e:
@@ -648,7 +677,7 @@ async def get_products_not_paid():
     try:
         # Query the database for all unpaid orders from the last 7 days (is_paid = False)
         query = Form.select(Form.product_name).join(Clients).join(Payment).where(
-            Payment.is_paid == False).dicts()
+            Payment.is_paid == False, Payment.created_at >= datetime.now() - timedelta(days=7)).dicts()
 
         product_name = list(query)
         return product_name
@@ -663,7 +692,7 @@ async def get_clients_not_paid():
         # Query the database for all unpaid orders from the last 7 days (is_paid = False)
         query = TelegramUsers.select(
             TelegramUsers.telegram_username).join(Clients).join(
-            Payment).where(Payment.is_paid == False).dicts()
+            Payment).where(Payment.is_paid == False, Payment.created_at >= datetime.now() - timedelta(days=7)).dicts()
 
         client_name = list(query)
         print(client_name)

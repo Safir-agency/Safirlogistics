@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeybo
     KeyboardButton
 from emoji import emojize
 from aiogram import types
+from aiogram.utils.web_app import WebAppInitData
 
 from lexicon.lexicon import LEXICON_BUTTON_SUBMIT_AN_APPLICATION, LEXICON_BUTTON_OUR_PRICE, \
     LEXICON_BUTTON_TECHNICAL_SUPPORT, LEXICON_BUTTON_SHARE_NUMBER, LEXICON_BUTTON_BACK_TO_MAIN_MENU, \
@@ -44,6 +45,7 @@ def set_main_menu(user_id: int, lang) -> InlineKeyboardMarkup:
     button_1 = InlineKeyboardButton(
         text=LEXICON_BUTTON_SUBMIT_AN_APPLICATION.get(lang, 'en'),
         web_app=types.WebAppInfo(url=f'{WEB_APP_URL}/form?userId={user_id}')
+        # web_app=types.WebAppInfo(url=f'{WEB_APP_URL}/form?userId={user_id}')
     )
     button_2 = InlineKeyboardButton(
         text=LEXICON_BUTTON_OUR_PRICE.get(lang, 'en'),

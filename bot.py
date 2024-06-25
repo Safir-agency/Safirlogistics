@@ -22,6 +22,7 @@ load_dotenv('./config_data/.env')
 API_TOKEN = os.getenv('API_TOKEN')
 
 WEB_APP_URL = os.getenv('WEB_APP_URL')
+logger.info(f'WEB_APP_URL: {WEB_APP_URL}')
 
 WEB_SERVER_HOST = os.getenv('WEB_SERVER_HOST')
 WEB_SERVER_PORT = os.getenv('WEB_SERVER_PORT')
@@ -31,7 +32,8 @@ print('WEB_SERVER_HOST:', WEB_SERVER_HOST,
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "my-secret"
 BASE_WEBHOOK_URL = os.getenv('BASE_WEBHOOK_URL')
-print(f'{WEB_APP_URL}')
+logger.info(f'BASE_WEBHOOK_URL: {BASE_WEBHOOK_URL}')
+logger.info(f'WEBHOOK_PATH: {WEBHOOK_PATH}')
 
 router = Router()
 
