@@ -4,7 +4,7 @@ from peewee import DoesNotExist, fn
 from typing import Tuple, List
 from dateutil.relativedelta import relativedelta
 
-from database.models import TelegramUsers, Subscriptions, Form, Clients, TechSupport, Payment
+from database.models import TelegramUsers, Subscriptions, Form, Clients, TechSupport, Payment, Invoices
 from py_logger import get_logger
 from datetime import datetime, time, timedelta
 
@@ -31,6 +31,54 @@ async def save_user_to_db(user_data):
     except Exception as e:
         print(f"Error while saving user to database: {e}")
 
+async def save_client(telegram_id, form_id):
+    try:
+        telegram_user = TelegramUsers.get(TelegramUsers.telegram_id == telegram_id)
+        Clients.get_or_create(
+            telegram_id=telegram_user,
+            form_id=form_id
+        )
+        logger.info(f"Client saved with telegram_id: {telegram_id} and form_id: {form_id}")
+
+    except Exception as e:
+        logger.error(f"Error while saving client to database: {e}")
+
+async def save_invoice(user_id: int, invoice_id: str, amount: int,
+                       status: str, payment_method: str) -> None:
+    try:
+        invoice, created = Invoices.get_or_create(
+            user_id=user_id,
+            invoice_id=invoice_id,
+            amount=amount,
+            status=status,
+            payment_method=payment_method)
+
+        if created:
+            logger.info(f"New invoice saved to database: {invoice.invoice_id}")
+        else:
+            logger.info(f"Invoice already exists in database: {invoice.invoice_id}")
+
+    except Exception as e:
+        logger.error(f"Error while saving invoice to database: {e}")
+
+
+async def db_check_is_fresh_payment(invoiceId: str) -> bool:
+    try:
+        invoice = Invoices.get(Invoices.invoice_id == invoiceId)
+        if invoice.status == 'success':
+            return False
+
+    except Exception as e:
+        logger.error(f"Error while checking if payment is fresh: {e}")
+
+async def change_invoice_status(invoiceId: str, status: str) -> None:
+    try:
+        invoice = Invoices.get(Invoices.invoice_id == invoiceId)
+        invoice.status = status
+        invoice.save()
+    except Exception as e:
+        logger.error(f"Error while changing invoice status: {e}")
+
 
 async def save_user_tech_support(telegram_id, message, file_type, file_id):
     try:
@@ -49,6 +97,13 @@ async def save_user_tech_support(telegram_id, message, file_type, file_id):
     except Exception as e:
         print(f"Error while saving client to database tech support: {e}")
 
+async def get_client_id_by_invoice_id(invoiceId: str) -> int:
+    try:
+        invoice = Invoices.get(Invoices.invoice_id == invoiceId)
+        return invoice.user_id.id
+    except Exception as e:
+        logger.error(f"Error while getting client id by invoice id: {e}")
+        return 0
 
 async def get_telegram_user_id(username):
     try:
@@ -299,6 +354,7 @@ async def sum_units_by_client(telegram_username):
         logger.error(f"Error while getting total units by client from database: {e}")
         return 0
 
+
 async def get_info_by_product_name(product_name):
     try:
         form = Form.get(Form.product_name == product_name)
@@ -319,6 +375,7 @@ async def get_info_by_product_name(product_name):
 
 """Payment info"""
 
+
 async def get_amounts_by_asin(asin):
     try:
         form = Form.get(Form.ASIN == asin)
@@ -329,6 +386,7 @@ async def get_amounts_by_asin(asin):
     except Exception as e:
         logger.error(f"Exception in get_amount_paid for {asin}: {str(e)}")
         return 0, 0
+
 
 async def get_amounts_by_order_number(order_number):
     try:
@@ -387,6 +445,7 @@ async def get_last_form_by_client(telegram_username):
     except Exception as e:
         logger.error(f"Error while getting last form by client from database: {e}")
         return None
+
 
 async def get_info_by_client(telegram_username):
     try:
