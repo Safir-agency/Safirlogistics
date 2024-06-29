@@ -7,6 +7,8 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiogram.types import Message
 from aiogram.filters import CommandStart
 from aiogram import types
+from contextlib import asynccontextmanager
+import uvicorn
 
 from create_bot import *
 
@@ -14,6 +16,14 @@ from database.models import create_tables, do_peewee_migration
 from handlers import handlers_admin, client_handlers
 from py_logger import get_logger
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request, status
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from services.payments import set_webhook, set_paypal_webhook
+from routes.payments import router as payment_router
 
 logger = get_logger(__name__)
 
@@ -25,7 +35,7 @@ WEB_APP_URL = os.getenv('WEB_APP_URL')
 logger.info(f'WEB_APP_URL: {WEB_APP_URL}')
 
 WEB_SERVER_HOST = os.getenv('WEB_SERVER_HOST')
-WEB_SERVER_PORT = os.getenv('WEB_SERVER_PORT')
+WEB_SERVER_PORT = int(os.getenv('WEB_SERVER_PORT'))
 print('WEB_SERVER_HOST:', WEB_SERVER_HOST,
       'WEB_SERVER_PORT:', WEB_SERVER_PORT)
 
@@ -37,54 +47,54 @@ logger.info(f'WEBHOOK_PATH: {WEBHOOK_PATH}')
 
 router = Router()
 
-async def options_handler(request):
-    return web.Response(headers={
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET',
-        'Access-Control-Allow-Headers': 'Content-Type',
-    })
 
-async def on_startup(bot: Bot) -> None:
-    await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await bot.set_webhook(url=BASE_WEBHOOK_URL, drop_pending_updates=True)
+    await set_webhook()
+    # await set_paypal_webhook()  # disable paypal
 
-async def on_shutdown(app):
-    await bot.delete_webhook()
-
-# Функция конфигурирования и запуска бота
-def main():
-    logger.info('Start bot...')
-
-    # Create db tables
-    create_tables()
-    logger.info('Create tables...')
-
-    # Регистрируем роутер в диспетчере
-    dp.include_router(client_handlers.router)
-    dp.include_router(handlers_admin.router)
-
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
-
-    app = web.Application()
-
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-        secret_token=WEBHOOK_SECRET
-    )
-
-    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
-
-    app.router.add_route("OPTIONS", "/webhook", options_handler)
-
-    # Mount dispatcher startup and shutdown hooks to aiohttp application
-    setup_application(app, dp, bot=bot)
-
-    # And finally start webserver
-    web.run_app(app, host=WEB_SERVER_HOST, port=int(WEB_SERVER_PORT))
+    yield
+    # await bot.delete_webhook()
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    main()
-    # do_peewee_migration()
+app = FastAPI(lifespan=lifespan)
+logger.info("App is starting..")
+
+app.include_router(payment_router)
+
+origins = [
+    "http://localhost:3000",  # Assuming you might be using localhost for development
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/healthcheck", status_code=status.HTTP_200_OK)
+async def healthcheck(request: Request):
+    return {"ok": True}
+
+
+@app.post(WEBHOOK_PATH)
+async def bot_webhook(update: dict):
+    logger.debug("Bot receive data from Telegram Server")
+    telegram_update = types.Update(**update)
+    await dp.feed_update(bot=bot, update=telegram_update)
+
+
+if __name__ == '__main__':
+    uvicorn.run('bot:app', host=WEB_SERVER_HOST, port=WEB_SERVER_PORT, reload=True)

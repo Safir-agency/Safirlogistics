@@ -170,6 +170,18 @@ class Payment(BaseModel):
         database = db
         db_table = 'payments'
 
+class Invoices(BaseModel):
+    id = AutoField()
+    user_id = ForeignKeyField(Clients, backref='invoices', on_delete='CASCADE')
+    invoice_id = CharField()
+    amount = FloatField()
+    payment_method = CharField()
+    status = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db
+        db_table = 'invoices'
 
 
 def create_tables():
@@ -187,6 +199,7 @@ def create_tables():
         db.create_tables([Clients], safe=True)
         db.create_tables([TechSupport], safe=True)
         db.create_tables([Payment], safe=True)
+        db.create_tables([Invoices], safe=True)
 
 
 def do_peewee_migration():
