@@ -228,11 +228,8 @@ async def get_first_order_date_by_client(telegram_username):
                      .limit(1))
             date_time = query[0].created_at
 
-            # logger.info(f"First order date by client {telegram_username}: {date_time}")
             return date_time
-        # else:
-        #     logger.error(f"No user found with username: {telegram_username}")
-        #     return None
+
     except Exception as e:
         logger.error(f"Error while getting first order date by client from database: {e}")
         return None
@@ -249,11 +246,8 @@ async def get_quantity_of_orders_by_client(telegram_username):
                      .where(Clients.telegram_id == user_id))
             quantity = query.count()
 
-            # logger.info(f"Quantity of orders by client {telegram_username}: {quantity}")
             return quantity
-        # else:
-        #     logger.error(f"No user found with username: {telegram_username}")
-        #     return None
+
     except Exception as e:
         logger.error(f"Error while getting quantity of orders by client from database: {e}")
         return None
@@ -280,24 +274,6 @@ async def get_product_name_by_client(telegram_username):
         return []
 
 
-async def get_fba_status(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.FBA
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
-async def get_fbm_status(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.FBM
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
 async def get_asin(product_name):
     try:
         # Використовуємо select().where() для отримання всіх відповідних записів
@@ -307,15 +283,6 @@ async def get_asin(product_name):
         return asins
     except Exception as e:
         logger.error(f"Error while getting ASINs for product name {product_name}: {e}")
-        return None
-
-
-async def get_number_of_units(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.number_of_units
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
         return None
 
 
@@ -332,50 +299,19 @@ async def sum_units_by_client(telegram_username):
         logger.error(f"Error while getting total units by client from database: {e}")
         return 0
 
-
-async def get_comments(product_name):
+async def get_info_by_product_name(product_name):
     try:
         form = Form.get(Form.product_name == product_name)
-        return form.comment
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
-async def get_set_info(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.SET
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
-async def get_not_set_info(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.NOT_SET
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
-""" IF SET """
-
-
-async def get_number_of_sets(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.number_of_sets
-    except Form.DoesNotExist:
-        logger.error(f"Product with name {product_name} not found.")
-        return None
-
-
-async def number_of_units_in_set(product_name):
-    try:
-        form = Form.get(Form.product_name == product_name)
-        return form.number_of_units_in_set
+        return {
+            'comment': form.comment,
+            'SET': form.SET,
+            'NOT_SET': form.NOT_SET,
+            'number_of_sets': form.number_of_sets,
+            'number_of_units_in_set': form.number_of_units_in_set,
+            'number_of_units': form.number_of_units,
+            'FBA': form.FBA,
+            'FBM': form.FBM
+        }
     except Form.DoesNotExist:
         logger.error(f"Product with name {product_name} not found.")
         return None
@@ -383,49 +319,27 @@ async def number_of_units_in_set(product_name):
 
 """Payment info"""
 
-
-async def get_amount_due(asin):
+async def get_amounts_by_asin(asin):
     try:
         form = Form.get(Form.ASIN == asin)
-        amount_due = Payment.select(Payment.amount_due).where(Payment.form_id == form.id).scalar()
+        amount_paid = Payment.select(fn.SUM(Payment.amount_paid)).where(Payment.form_id == form.id).scalar() or 0
+        amount_due = Payment.select(fn.SUM(Payment.amount_due)).where(Payment.form_id == form.id).scalar() or 0
+        return amount_paid, amount_due
 
-        return amount_due
-    except Exception as e:
-        logger.error(f"Exception in get_amount_due for {asin}: {str(e)}")
-        return 0
-
-
-async def get_amount_due_by_order_number(order_number):
-    try:
-        form = Form.get(Form.order_number == order_number)
-        amount_due = Payment.select(Payment.amount_due).where(Payment.form_id == form.id).scalar()
-
-        return amount_due
-    except Exception as e:
-        logger.error(f"Exception in get_amount_due for {order_number}: {str(e)}")
-        return 0
-
-
-async def get_amount_paid(asin):
-    try:
-        form = Form.get(Form.ASIN == asin)
-        amount_paid = Payment.select(Payment.amount_paid).where(Payment.form_id == form.id).scalar()
-
-        return amount_paid
     except Exception as e:
         logger.error(f"Exception in get_amount_paid for {asin}: {str(e)}")
-        return 0
+        return 0, 0
 
-
-async def get_amount_paid_by_order_number(order_number):
+async def get_amounts_by_order_number(order_number):
     try:
         form = Form.get(Form.order_number == order_number)
         amount_paid = Payment.select(Payment.amount_paid).where(Payment.form_id == form.id).scalar()
+        amount_due = Payment.select(Payment.amount_due).where(Payment.form_id == form.id).scalar()
 
-        return amount_paid
+        return amount_paid, amount_due
     except Exception as e:
         logger.error(f"Exception in get_amount_paid for {order_number}: {str(e)}")
-        return 0
+        return 0, 0
 
 
 """Look for clients"""
@@ -474,8 +388,7 @@ async def get_last_form_by_client(telegram_username):
         logger.error(f"Error while getting last form by client from database: {e}")
         return None
 
-
-async def get_debt_by_client(telegram_username):
+async def get_info_by_client(telegram_username):
     try:
         user_id = TelegramUsers.select(TelegramUsers.id).where(
             TelegramUsers.telegram_username == telegram_username).scalar()
@@ -489,77 +402,27 @@ async def get_debt_by_client(telegram_username):
                      .limit(1))
             if query.exists():
                 amount_due = query[0].amount_due
-                print(f"Amount due: {amount_due}")
                 amount_paid = query[0].amount_paid
-                print(f"Amount paid: {amount_paid}")
                 debt = amount_due - amount_paid
-                logger.info(f"Debt by client {telegram_username}: {debt}")
+                logger.info(f"Amount due by client {telegram_username}: {debt}")
 
-                return debt
+                return {
+                    'amount_due': amount_due,
+                    'amount_paid': amount_paid,
+                    'debt': debt
+                }
             else:
                 logger.info(f"Client {telegram_username} has no debt.")
-                return 0
-        else:
-            logger.error(f"No user found with username: {telegram_username}")
-            return None
-    except Exception as e:
-        logger.error(f"Error while getting debt by client from database: {e}")
-        return None
-
-
-async def get_amount_due_by_client(telegram_username):
-    try:
-        user_id = TelegramUsers.select(TelegramUsers.id).where(
-            TelegramUsers.telegram_username == telegram_username).scalar()
-
-        if user_id:
-            query = (Payment.select(Payment.amount_due)
-                     .join(Clients)
-                     .join(TelegramUsers)
-                     .where(TelegramUsers.id == user_id)
-                     .order_by(Payment.created_at.desc())
-                     .limit(1))
-            if query.exists():
-                amount_due = query[0].amount_due
-                logger.info(f"Amount due by client {telegram_username}: {amount_due}")
-
-                return amount_due
-            else:
-                logger.info(f"Client {telegram_username} has no debt.")
-                return 0
+                return {
+                    'amount_due': 0,
+                    'amount_paid': 0,
+                    'debt': 0
+                }
         else:
             logger.error(f"No user found with username: {telegram_username}")
             return None
     except Exception as e:
         logger.error(f"Error while getting amount due by client from database: {e}")
-        return None
-
-
-async def get_amount_paid_by_client(telegram_username):
-    try:
-        user_id = TelegramUsers.select(TelegramUsers.id).where(
-            TelegramUsers.telegram_username == telegram_username).scalar()
-
-        if user_id:
-            query = (Payment.select(Payment.amount_paid)
-                     .join(Clients)
-                     .join(TelegramUsers)
-                     .where(TelegramUsers.id == user_id)
-                     .order_by(Payment.created_at.desc())
-                     .limit(1))
-            if query.exists():
-                amount_paid = query[0].amount_paid
-                logger.info(f"Amount paid by client {telegram_username}: {amount_paid}")
-
-                return amount_paid
-            else:
-                logger.info(f"Client {telegram_username} has no debt.")
-                return 0
-        else:
-            logger.error(f"No user found with username: {telegram_username}")
-            return None
-    except Exception as e:
-        logger.error(f"Error while getting amount paid by client from database: {e}")
         return None
 
 

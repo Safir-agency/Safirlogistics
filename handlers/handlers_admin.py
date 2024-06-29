@@ -1,40 +1,30 @@
-from datetime import datetime
 import os
+from datetime import datetime
 
-import pandas as pd
 import matplotlib.pyplot as plt
-
+import pandas as pd
 import pytz
-from aiogram import Router, F, types
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, InputFile, FSInputFile
-from aiogram.methods import SendVideo, SendAudio, SendVoice, SendPhoto, SendDocument
-
-from database.db_operations import get_clients_telegram_username, get_fba_status, \
-    get_fbm_status, get_asin, get_product_name_by_client, get_number_of_units, get_comments, get_set_info, \
-    get_not_set_info, get_number_of_sets, number_of_units_in_set, get_all_clients_sorted_by_recent_form, \
-    get_last_form_by_client, get_debt_by_client, get_amount_due_by_client, get_amount_paid_by_client, get_amount_due, \
-    get_amount_paid, \
-    get_clients_not_paid, get_products_not_paid, get_not_paid_orders_by_last_30_days, \
-    get_not_paid_orders_by_last_half_year, get_not_paid_orders_by_last_1_year, get_first_order_date_by_client, \
-    get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_amount_paid_by_order_number, \
-    get_amount_due_by_order_number, get_order_number_by_asin, get_amount_not_paid_by_last_7_days_by_client
-from utils.helpers import load_data_to_excel
-from filters.is_admin import is_admin
-from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_SEND_XLSX_BY_ALL_CLIENTS, \
-    LEXICON_SEND_XLSX_BY_CLIENT, LEXICON_CHOOSE_CLIENT, LEXICON_SEND_PHOTO_BY_ALL_CLIENTS, LEXICON_SEND_PHOTO_BY_CLIENT, \
-    LEXICON_NO_CLIENTS, LEXICON_NEXT_5_CLIENTS, LEXICON_CLIENT_HAS_NO_DEBT, LEXICON_CLIENT_HAS_DEBT, \
-    LEXICON_NOT_PAID_LAST_7_DAYS, LEXICON_NOT_PAID_LAST_30_DAYS, LEXICON_NOT_PAID_LAST_HALF_YEAR, \
-    LEXICON_NOT_PAID_LAST_1_YEAR, LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT, LEXICON_NO_NOT_PAID_ORDERS
-from states.states_admin import AdminCallbackFactory, AdminStates
 from aiogram.types import CallbackQuery, Message
-from create_bot import bot
-from xlsxwriter import Workbook
+from aiogram.types import FSInputFile
 
-from py_logger import get_logger
+from create_bot import bot
+from database.db_operations import get_clients_telegram_username, \
+    get_product_name_by_client, get_all_clients_sorted_by_recent_form, \
+    get_last_form_by_client, \
+    get_first_order_date_by_client, \
+    get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_info_by_product_name, \
+    get_order_number_by_asin, get_info_by_client, get_amounts_by_asin, get_amounts_by_order_number, get_asin
+from filters.is_admin import is_admin
 from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_choose_client, \
     set_choose_client_phone, set_choose_5_clients, set_back_to_menu
+from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_CHOOSE_CLIENT, LEXICON_NO_CLIENTS, \
+    LEXICON_NEXT_5_CLIENTS, LEXICON_CLIENT_HAS_NO_DEBT, LEXICON_CLIENT_HAS_DEBT, \
+    LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT
+from py_logger import get_logger
+from states.states_admin import AdminCallbackFactory, AdminStates
 
 logger = get_logger(__name__)
 
@@ -139,9 +129,8 @@ async def process_statistics_by_all_clients_excel(callback: CallbackQuery, state
             total_amount_paid = 0
 
             for order_number in orders_number:
-                amount_due = await get_amount_due_by_order_number(order_number)
+                amount_paid, amount_due = await get_amounts_by_order_number(order_number)
                 total_amount_due += amount_due
-                amount_paid = await get_amount_paid_by_order_number(order_number)
                 total_amount_paid += amount_paid
 
             orders_dict['Clients'].append(client)
@@ -239,24 +228,33 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
         logger.info(f"Client: {client}")
 
         orders_number = await get_order_number_by_client(client)
+        logger.info(f"Orders number: {orders_number}")
         product_names = await get_product_name_by_client(client)
+        logger.info(f"Product names: {product_names}")
         registration_date = await get_first_order_date_by_client(client)
+        logger.info(f"Registration date: {registration_date}")
 
         for order_number in orders_number:
+            logger.info(f"Order number: {order_number}")
             for product in product_names:
+                logger.info(f"Product name: {product}")
+                get_info_by_prod = await get_info_by_product_name(product)
                 asins = await get_asin(product)
-                fba = await get_fba_status(product)
-                fbm = await get_fbm_status(product)
-                number_of_units = await get_number_of_units(product)
-                comment = await get_comments(product)
-                set_flag = await get_set_info(product)
-                no_set = await get_not_set_info(product)
-                number_of_sets = await get_number_of_sets(product)
-                units_in_set = await number_of_units_in_set(product)
+                fba = get_info_by_prod['FBA']
+                fbm = get_info_by_prod['FBM']
+                number_of_units = get_info_by_prod['number_of_units']
+                comment = get_info_by_prod['comment']
+                set_flag = get_info_by_prod['SET']
+                no_set = get_info_by_prod['NOT_SET']
+                number_of_sets = get_info_by_prod['number_of_sets']
+                units_in_set = get_info_by_prod['number_of_units_in_set']
+                logger.info(f"Get info by product: {get_info_by_prod}")
 
                 for asin in asins:
-                    amount_due = await get_amount_due(asin)
-                    amount_paid = await get_amount_paid(asin)
+                    logger.info(f"ASIN: {asin}")
+                    amount_details = await get_amounts_by_asin(asin)
+                    amount_due = amount_details[0]
+                    amount_paid = amount_details[1]
                     order_num = await get_order_number_by_asin(asin)
 
                     orders_dict['Order №'].append(order_num[0])
@@ -311,7 +309,7 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
 
         logger.info("Statistics sent successfully.")
 
-    except Exception as e:
+    except ValueError as e:
         logger.error(f'Error in process_statistics_by_client_excel: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
@@ -341,9 +339,8 @@ async def process_statistics_by_all_clients_tg(callback: CallbackQuery):
             total_amount_paid = 0
 
             for order_number in orders_number:
-                amount_due = await get_amount_due_by_order_number(order_number)
+                amount_paid, amount_due = await get_amounts_by_order_number(order_number)
                 total_amount_due += amount_due
-                amount_paid = await get_amount_paid_by_order_number(order_number)
                 total_amount_paid += amount_paid
 
             orders_dict['Clients'].append(client)
@@ -424,19 +421,21 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
 
         for order_number in orders_number:
             for product in product_names:
+                get_info_by_prod = await get_info_by_product_name(product)
                 asins = await get_asin(product)
-                fba = await get_fba_status(product)
-                fbm = await get_fbm_status(product)
-                number_of_units = await get_number_of_units(product)
-                comment = await get_comments(product)
-                set_flag = await get_set_info(product)
-                no_set = await get_not_set_info(product)
-                number_of_sets = await get_number_of_sets(product)
-                units_in_set = await number_of_units_in_set(product)
+                fba = get_info_by_prod['FBA']
+                fbm = get_info_by_prod['FBM']
+                number_of_units = get_info_by_prod['number_of_units']
+                comment = get_info_by_prod['comment']
+                set_flag = get_info_by_prod['SET']
+                no_set = get_info_by_prod['NOT_SET']
+                number_of_sets = get_info_by_prod['number_of_sets']
+                units_in_set = get_info_by_prod['number_of_units_in_set']
 
                 for asin in asins:
-                    amount_due = await get_amount_due(asin)
-                    amount_paid = await get_amount_paid(asin)
+                    amounts = await get_amounts_by_asin(asin)
+                    amount_due = amounts[0]
+                    amount_paid = amounts[1]
                     order_num = await get_order_number_by_asin(asin)
 
                     orders_dict['Order №'].append(order_num[0])
@@ -477,18 +476,15 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
         await callback.answer("An error occurred. Please try again later.")
 
 
-''' Handler for orders action '''
-
-
-@router.callback_query(AdminCallbackFactory.filter(F.action == "look_for_order_not_paid"))
-async def process_orders_not_paid(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-        await callback.message.answer(LEXICON_CHOOSE_ACTION.get(callback.from_user.language_code, 'en'),
-                                      reply_markup=set_orders_not_paid_menu(callback.from_user.language_code))
-
-    except Exception as e:
-        logger.error(f'Error in process_orders_not_paid: {e}')
+# @router.callback_query(AdminCallbackFactory.filter(F.action == "look_for_order_not_paid"))
+# async def process_orders_not_paid(callback: CallbackQuery):
+#     try:
+#         await callback.message.delete()
+#         await callback.message.answer(LEXICON_CHOOSE_ACTION.get(callback.from_user.language_code, 'en'),
+#                                       reply_markup=set_orders_not_paid_menu(callback.from_user.language_code))
+#
+#     except Exception as e:
+#         logger.error(f'Error in process_orders_not_paid: {e}')
 
 
 ''' Handler for back actions '''
@@ -659,9 +655,12 @@ async def choose_5_clients(callback: CallbackQuery, state: FSMContext, callback_
 
         form_info = await get_last_form_by_client(callback_data.client_id)
         logger.debug(f"Form info: {form_info}")
-        debt_info = await get_debt_by_client(callback_data.client_id)
-        amount_payable = await get_amount_due_by_client(callback_data.client_id)
-        amount_paid = await get_amount_paid_by_client(callback_data.client_id)
+        # debt_info = await get_debt_by_client(callback_data.client_id)
+        # amount_payable = await get_amount_due_by_client(callback_data.client_id)
+        info = await get_info_by_client(callback_data.client_id)
+        amount_payable = info['amount_due']
+        amount_paid = info['amount_paid']
+        debt_info = info['debt']
 
         if amount_payable == amount_paid:
             await callback.message.answer(LEXICON_CLIENT_HAS_NO_DEBT.get(callback.from_user.language_code, 'en').format(
