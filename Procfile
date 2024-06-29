@@ -1,1 +1,1 @@
-web: uvicorn main:app --port ${PORT:-8081} --host 0.0.0.0
+web: uvicorn bot:app --port ${PORT:-8081} --host 0.0.0.0
