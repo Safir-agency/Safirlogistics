@@ -26,7 +26,7 @@ class ColorFormatter(logging.Formatter):
 
 _format = "%(asctime)s [%(levelname)s] - %(name)s - %(funcName)s(%(lineno)d) - %(message)s"
 
-file = 'data/logs.log'
+file = 'logs.log'
 
 file_handler = logging.FileHandler(file)
 file_handler.setLevel(logging.INFO)
