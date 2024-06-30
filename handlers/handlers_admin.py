@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.types import FSInputFile
 
-from create_bot import bot
+from bot_init import bot
 from database.db_operations import get_clients_telegram_username, \
     get_product_name_by_client, get_all_clients_sorted_by_recent_form, \
     get_last_form_by_client, \

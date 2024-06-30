@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.methods import SendVideo, SendAudio, SendVoice, SendPhoto, SendDocument
 
-from create_bot import bot
+from bot_init import bot
 from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db, change_fba_status, \
     change_fbm_status, save_user_tech_support
 from database.models import TelegramUsers

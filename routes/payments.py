@@ -106,11 +106,11 @@ async def payment_button_handler(data: PaymentRequest):
     """Функція створення інвойсу для оплати та зберігання користувачів"""
     logger.info("Start payment_button_handler")
 
-    user_id = await save_client(telegram_id=data.telegram_id, form_id=None)
+    # user_id = await save_client(telegram_id=data.telegram_id, form_id=None)
 
     # destination = MONO_DESTINATION_UK if data.lang == "uk" else MONO_DESTINATION_RU
     destination = MONO_DESTINATION_RU
-    product = {"amount": data.amount, "reference": user_id, "destination": destination}
+    product = {"amount": data.amount, "reference": 1, "destination": destination}
     if data.payment_method == "Monobank":
         invoice_data = await create_invoice_mono(product)
         print(f"{invoice_data=}")
@@ -118,7 +118,7 @@ async def payment_button_handler(data: PaymentRequest):
         paypal_response = await create_invoice_paypal(product)
         payment_url = [obj["href"] for obj in paypal_response['links'] if obj["rel"] == 'approval_url'][0]
         invoice_data = {'invoiceId': paypal_response['id'], 'pageUrl': payment_url}
-    await save_invoice(user_id=user_id, invoice_id=invoice_data["invoiceId"], amount=data.amount,
+    await save_invoice(user_id=1, invoice_id=invoice_data["invoiceId"], amount=data.amount,
                        status='created', payment_method=data.payment_method)
 
     logger.info(f"Received data: {data}")
