@@ -96,10 +96,6 @@ def main():
     create_tables()
     logger.info('Tables created...')
 
-    # Register routers in the dispatcher
-    dp.include_router(client_handlers.router)
-    dp.include_router(handlers_admin.router)
-
     uvicorn.run('bot:app', host=WEB_SERVER_HOST, port=WEB_SERVER_PORT, reload=True)
 
 
