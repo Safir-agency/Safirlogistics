@@ -1,29 +1,21 @@
 import logging
 import os
 import sys
-from aiogram import Router, Bot, Dispatcher
-from aiohttp import web
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram.types import Message
-from aiogram.filters import CommandStart
-from aiogram import types
 from contextlib import asynccontextmanager
+
 import uvicorn
-
-from bot_init import bot
-from dispatcher import dp
-
-from database.models import create_tables, do_peewee_migration
-from handlers import handlers_admin, client_handlers
-from py_logger import get_logger
+from aiogram import types
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from services.payments import set_webhook, set_paypal_webhook
-from routes.payments import router as payment_router
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from bot_init import bot
+from database.models import create_tables
+from dispatcher import dp
+from py_logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -49,8 +41,6 @@ logger.info(f'WEB_SERVER_PORT: {WEB_SERVER_PORT}')
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
-    await set_webhook()
-    await set_paypal_webhook()
     yield
     await bot.delete_webhook()
 
@@ -58,7 +48,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 logger.info("App is starting...")
 
-app.include_router(payment_router)
+# app.include_router(payment_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,7 +70,6 @@ async def root(request: Request):
 @app.get("/healthcheck", status_code=status.HTTP_200_OK)
 async def healthcheck(request: Request):
     return {"ok": True}
-
 
 @app.post(WEBHOOK_PATH)
 async def bot_webhook(update: dict):

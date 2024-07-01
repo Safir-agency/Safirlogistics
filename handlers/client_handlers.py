@@ -1,35 +1,26 @@
 import os
 
 from aiogram import Router, F, types
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.methods import SendVideo, SendAudio, SendVoice, SendPhoto, SendDocument
-
-from bot_init import bot
-from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db, change_fba_status, \
-    change_fbm_status, save_user_tech_support
-from database.models import TelegramUsers
-from keyboards.keyboard_admin import set_answer_to_client
-
-from keyboards.keyboards_client import set_main_menu, set_back_button, \
-    choose_fba_or_fbm, set_or_not_set, end_conversation_button
-
-from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, LEXICON_NAME_OF_PRODUCT, \
-    LEXICON_CHOOSE_FBM_OR_FBA, LEXICON_ASIN, LEXICON_SET_OR_NOT_SET, LEXICON_NUMBER_OF_UNITS_NOT_SET, \
-    LEXICON_NUMBER_OF_SETS, LEXICON_NUMBER_OF_UNITS_IN_SET, \
-    LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION, LEXICON_CHOOSE_AN_ACTION, LEXICON_MESSAGE_SEND
-from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER
-from states.states_admin import AdminCallbackFactory
-
-from states.states_client import ClientCallbackFactory, ClientStates, TechSupportStates
+from aiogram.types import CallbackQuery, Message, BufferedInputFile
 from emoji import emojize
 
-from utils.utils import custom_validate_phone, fetch_user_ip, fetch_user_location
-
+from bot_init import bot
 from config_data.config import Config, load_config
-
+from database.db_operations import save_user_to_db, save_user_tech_support
+from database.models import TelegramUsers
+from keyboards.keyboard_admin import set_answer_to_client
+from keyboards.keyboards_client import set_main_menu, set_back_button, \
+    end_conversation_button, paypal_button, form_button
+from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, \
+    LEXICON_CHOOSE_AN_ACTION, LEXICON_MESSAGE_SEND, \
+    LEXICON_AMOUNT_TO_PAY, LEXICON_RULES_START_WORK_WITH_US
+from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER
 from py_logger import get_logger
+from services.paypal import create_payment
+from states.states_client import ClientCallbackFactory, ClientStates, TechSupportStates
 
 logger = get_logger(__name__)
 
@@ -214,6 +205,7 @@ async def tech_support_conversation(message: Message, state: FSMContext):
 
 """Answer from technical support """
 
+
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'answer_to_client'))
 async def answer_to_client_btn(callback: CallbackQuery, state: FSMContext):
     try:
@@ -247,3 +239,70 @@ async def end_conversation(message: Message):
     except ValueError as e:
         logger.error(f"Error while sending end conversation message: {e}")
         await message.answer("An error occurred. Please try again later.")
+
+
+"""Payment"""
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'pay'))
+async def waiting_for_amount(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Payment command from user {callback.from_user.id}")
+
+        await callback.answer()
+        await callback.message.answer(LEXICON_AMOUNT_TO_PAY.get(
+            callback.from_user.language_code,
+            LEXICON_AMOUNT_TO_PAY['en']))
+
+        await state.set_state(ClientStates.waiting_for_amount)
+
+    except Exception as e:
+        logger.error(f"Error while processing payment: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_amount)
+async def payment(message: types.Message, state: FSMContext):
+    try:
+        logger.info(f"Processing payment for user {message.from_user.id}")
+        amount = float(message.text)
+        if amount <= 0:
+            await message.answer("Please enter a valid amount.")
+            return
+
+        approval_url = create_payment(amount)
+
+        keyboard = paypal_button(amount=amount, lang=message.from_user.language_code)
+        if approval_url:
+            await message.answer("Click the button below to pay with PayPal.", reply_markup=keyboard)
+        else:
+            await message.answer("Error: Unable to create payment.")
+
+        await state.clear()
+
+    except ValueError as e:
+        logger.error(f"Error while processing payment: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+"""Submit an application"""
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'start_work_with_us'))
+async def submit_an_application(callback: CallbackQuery):
+    try:
+        logger.info(f"Submit an application command from user {callback.from_user.id}")
+        # await callback.message.delete()
+
+        keyboard = form_button(user_id=callback.from_user.id, lang=callback.from_user.language_code)
+
+        await callback.message.answer(LEXICON_RULES_START_WORK_WITH_US.get(
+            callback.from_user.language_code,
+            LEXICON_RULES_START_WORK_WITH_US['en']),
+            reply_markup=keyboard)
+
+    except ValueError as e:
+        logger.error(f"Error while sending submit an application message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
