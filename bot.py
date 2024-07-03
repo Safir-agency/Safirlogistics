@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from bot_init import bot
 from database.models import create_tables
 from dispatcher import dp
+from handlers.client_handlers import web_app_data_handler
 from py_logger import get_logger
 
 logger = get_logger(__name__)
@@ -85,6 +86,7 @@ def main():
     create_tables()
     logger.info('Tables created...')
 
+    dp.message.register(web_app_data_handler)
     uvicorn.run('bot:app', host=WEB_SERVER_HOST, port=WEB_SERVER_PORT, reload=True)
 
 

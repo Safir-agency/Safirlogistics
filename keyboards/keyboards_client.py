@@ -85,6 +85,7 @@ def form_button(user_id: int, lang) -> ReplyKeyboardMarkup:
         text=LEXICON_BUTTON_SUBMIT_AN_APPLICATION.get(lang, 'en'),
         web_app=WebAppInfo(url=f'{WEB_APP_URL}/form?userId={user_id}'))
     panel = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[button_1]])
+
     return panel
 
 
@@ -101,36 +102,6 @@ def set_back_button(lang) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=LEXICON_BUTTON_BACK_TO_MAIN_MENU.get(lang, 'en'),
                                      callback_data=ClientCallbackFactory(
                                          action="back").pack())
-            ]
-        ],
-        resize_keyboard=True,
-    )
-    return keyboard
-
-
-def choose_fba_or_fbm() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="FBA ✅", callback_data=ClientCallbackFactory(
-                    action="fba").pack()),
-                InlineKeyboardButton(text="FBM ✅", callback_data=ClientCallbackFactory(
-                    action="fbm").pack())
-            ]
-        ],
-        resize_keyboard=True,
-    )
-    return keyboard
-
-
-def set_or_not_set() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Set ✅", callback_data=ClientCallbackFactory(
-                    action="set").pack()),
-                InlineKeyboardButton(text="Not set ❌", callback_data=ClientCallbackFactory(
-                    action="not_set").pack())
             ]
         ],
         resize_keyboard=True,

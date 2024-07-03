@@ -87,7 +87,7 @@ class Form(BaseModel):
     FBA = BooleanField(default=False)
     FBM = BooleanField(default=False)
     ASIN = CharField()
-    number_of_units = IntegerField()
+    number_of_units = IntegerField(null=True)
     comment = CharField(null=True)
     SET = BooleanField(default=False)
     NOT_SET = BooleanField(default=False)
@@ -112,15 +112,15 @@ class FormFBA(BaseModel):
         db_table = 'form_fba'
 
 
-class FormFBM(BaseModel):
-    id = AutoField()
-    form_id = ForeignKeyField(Form, backref='form_fbm', on_delete='CASCADE')
-    created_at = DateTimeField(default=datetime.datetime.now)
-    updated_at = DateTimeField(default=datetime.datetime.now)
-
-    class Meta:
-        database = db
-        db_table = 'form_fbm'
+# class FormFBM(BaseModel):
+#     id = AutoField()
+#     form_id = ForeignKeyField(Form, backref='form_fbm', on_delete='CASCADE')
+#     created_at = DateTimeField(default=datetime.datetime.now)
+#     updated_at = DateTimeField(default=datetime.datetime.now)
+#
+#     class Meta:
+#         database = db
+#         db_table = 'form_fbm'
 
 class SecondStage(BaseModel):
     id = AutoField()
@@ -191,7 +191,6 @@ def create_tables():
         db.create_tables([Subscriptions], safe=True)
         db.create_tables([Form], safe=True)
         db.create_tables([FormFBA], safe=True)
-        db.create_tables([FormFBM], safe=True)
         db.create_tables([SecondStage], safe=True)
         db.create_tables([SecondStageAdmin], safe=True)
         # db.create_tables([Discounts], safe=True)

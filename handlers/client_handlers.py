@@ -1,3 +1,4 @@
+import json
 import os
 
 from aiogram import Router, F, types
@@ -9,14 +10,14 @@ from emoji import emojize
 
 from bot_init import bot
 from config_data.config import Config, load_config
-from database.db_operations import save_user_to_db, save_user_tech_support
+from database.db_operations import save_user_to_db, save_user_tech_support, save_filled_form_to_db
 from database.models import TelegramUsers
 from keyboards.keyboard_admin import set_answer_to_client
 from keyboards.keyboards_client import set_main_menu, set_back_button, \
     end_conversation_button, paypal_button, form_button
 from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, \
     LEXICON_CHOOSE_AN_ACTION, LEXICON_MESSAGE_SEND, \
-    LEXICON_AMOUNT_TO_PAY, LEXICON_RULES_START_WORK_WITH_US
+    LEXICON_AMOUNT_TO_PAY, LEXICON_RULES_START_WORK_WITH_US, LEXICON_THANKS_FOR_FORM
 from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER
 from py_logger import get_logger
 from services.paypal import create_payment
@@ -306,3 +307,50 @@ async def submit_an_application(callback: CallbackQuery):
         await callback.answer("An error occurred. Please try again later.")
 
 
+@router.message(F.content_type == types.ContentType.WEB_APP_DATA)
+async def web_app_data_handler(message: types.Message):
+    try:
+        logger.info(f"Received data from web app: {message.web_app_data}")
+        web_app_data = message.web_app_data
+        data = web_app_data.data
+        # Deserialize the JSON data
+        data_dict = json.loads(data)
+        form_data = data_dict.get("formData", {})
+
+        product_name = form_data.get("product_name")
+        ASIN = form_data.get("ASIN")
+        phone_number = form_data.get("phone_number", "")
+        FBA = form_data.get("FBA", False)
+        FBM = form_data.get("FBM", False)
+
+        if FBA:
+            details = form_data.get("FBA_details", {})
+        elif FBM:
+            details = form_data.get("FBM_details", {})
+        else:
+            details = {}
+
+        number_of_units = details.get("number_of_units", 0)
+        SET = details.get("SET", False)
+        number_of_units_in_set = details.get("number_of_units_in_set", 0)
+        number_of_sets = details.get("number_of_sets", 0)
+        comment = details.get("comment", "")
+
+        user_id = message.from_user.id
+        await bot.send_message(text=LEXICON_THANKS_FOR_FORM.get(
+            message.from_user.language_code,
+            LEXICON_THANKS_FOR_FORM['en']),
+            chat_id=user_id)
+        logger.info(f"User {user_id} sent data from web app: {data}")
+
+        await save_filled_form_to_db(product_name=product_name,
+                                     ASIN=ASIN, SET=SET, NOT_SET=not SET,
+                                     number_of_sets=number_of_sets,
+                                     number_of_units_in_set=number_of_units_in_set,
+                                     number_of_units=number_of_units, FBA=FBA,
+                                     FBM=FBM, phone_number=phone_number,
+                                     comment=comment)
+
+    except ValueError as e:
+        logger.error(f"Error while processing web app data: {e}")
+        await message.answer("An error occurred. Please try again later.")
