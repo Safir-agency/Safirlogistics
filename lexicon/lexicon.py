@@ -209,3 +209,9 @@ LEXICON_THANKS_FOR_FORM: dict[str, str] = {
     'en': "<b>Thank you for filling out the form, we will contact you soon 😊</b>",
     'uk': "<b>Дякуємо за заповнену форму, ми скоро зв'яжемося з вами 😊</b>"
 }
+
+LEXICON_RECEIPT: dict[str, str] = {
+    'ru': "<b>Ваш чек:</b>",
+    'en': "<b>Your receipt:</b>",
+    'uk': "<b>Ваш чек:</b>",
+}

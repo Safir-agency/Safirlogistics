@@ -1,19 +1,22 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, \
-    KeyboardButton
+    KeyboardButton, WebAppInfo
 from typing import List
+
+from services.paypal import create_payment
 from states.states_admin import AdminCallbackFactory
 from states.states_client import ClientCallbackFactory
 from lexicon.lexicon_admin import LEXICON_BUTTON_STATISTICS, LEXICON_LOOK_FOR_CLIENT, LOOK_FOR_ORDER_NOT_PAID, \
     LEXICON_STATISTIC_CLIENTS_TELEGRAM, LEXICON_STATISTIC_CLIENTS_EXCEL, LEXICON_STATISTIC_BY_CLIENT_TG, \
     LEXICON_STATISTIC_BY_CLIENT_EXCEL, LEXICON_BY_LAST_7_DAYS, LEXICON_BY_LAST_30_DAYS, LEXICON_LAST_HALF_YEAR, \
     LEXICON_LAST_1_YEAR, LEXICON_ANSWER_TO_CLIENT, \
-    LEXICON_ADD_5_CLIENTS, LEXICON_BACK_TO_MENU, LEXICON_BACK_TO_PREVIOUS_CLIENTS
+    LEXICON_ADD_5_CLIENTS, LEXICON_BACK_TO_MENU, LEXICON_BACK_TO_PREVIOUS_CLIENTS, LEXICON_GIVE_CLIENT_PAYMENT_INFO
 
 
 def set_admin_menu(lang) -> InlineKeyboardMarkup:
     statistics_text = LEXICON_BUTTON_STATISTICS.get(lang, 'en')
     look_for_client_text = LEXICON_LOOK_FOR_CLIENT.get(lang, 'en')
     look_for_order_not_paid_text = LOOK_FOR_ORDER_NOT_PAID.get(lang, 'en')
+    receipt_text = LEXICON_GIVE_CLIENT_PAYMENT_INFO.get(lang, 'en')
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -22,6 +25,10 @@ def set_admin_menu(lang) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=look_for_client_text,
                                      callback_data=AdminCallbackFactory(action="look_for_client").pack())
             ],
+            [
+                InlineKeyboardButton(text=receipt_text,
+                                     callback_data=AdminCallbackFactory(action="receipt_text").pack())
+            ]
             # [
             #     InlineKeyboardButton(text=look_for_order_not_paid_text,
             #                          callback_data=AdminCallbackFactory(action="look_for_order_not_paid").pack()),
@@ -81,13 +88,17 @@ def set_statistics_menu(lang) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=statistics_by_clients_tg,
-                                     callback_data=AdminCallbackFactory(action="statistics_by_clients_tg").pack()),
+                                     callback_data=AdminCallbackFactory(action="statistics_by_clients_tg").pack())
+                ],
+            [
                 InlineKeyboardButton(text=statistics_by_clients_excel,
                                      callback_data=AdminCallbackFactory(action="statistics_by_clients_excel").pack())
             ],
             [
                 InlineKeyboardButton(text=statistics_by_client_tg,
-                                     callback_data=AdminCallbackFactory(action="statistics_by_client_tg").pack()),
+                                     callback_data=AdminCallbackFactory(action="statistics_by_client_tg").pack())
+                ],
+            [
                 InlineKeyboardButton(text=statistics_by_client_excel,
                                      callback_data=AdminCallbackFactory(action="statistics_by_client_excel").pack())
             ],
@@ -98,6 +109,19 @@ def set_statistics_menu(lang) -> InlineKeyboardMarkup:
         ]
     )
 
+    return keyboard
+
+def set_choose_client_for_receipt(clients: List[str]) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=client,
+                                  callback_data=AdminCallbackFactory(
+                                      action="set_choose_client_for_receipt", client_id=client).pack())]
+            for client in clients
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
     return keyboard
 
 
@@ -180,3 +204,31 @@ def set_back_to_menu(lang) -> InlineKeyboardMarkup:
         ]
     )
     return keyboard
+
+def payment_button(amount: float) -> InlineKeyboardMarkup:
+    approval_url_paypal = create_payment(amount)
+    approval_url_pioneer = 'https://login.payoneer.com/'
+
+    buttons = []
+
+    if approval_url_paypal:
+        button_paypal = InlineKeyboardButton(
+            text="Pay with PayPal",
+            web_app=WebAppInfo(url=approval_url_paypal)
+        )
+        buttons.append([button_paypal])
+    else:
+        buttons.append([InlineKeyboardButton(text="Error: Unable to create PayPal payment", callback_data="error_paypal")])
+
+    if approval_url_pioneer:
+        button_pioneer = InlineKeyboardButton(
+            text="Pay with Payoneer",
+            web_app=WebAppInfo(url=approval_url_pioneer)
+        )
+        buttons.append([button_pioneer])
+    else:
+        buttons.append([InlineKeyboardButton(text="Error: Unable to create Pioneer payment", callback_data="error_pioneer")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+    return keyboard
+

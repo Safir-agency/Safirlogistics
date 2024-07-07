@@ -9,6 +9,11 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.types import FSInputFile
+import qrcode
+from reportlab.lib.pagesizes import letter, A6
+from reportlab.lib.units import inch
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 from bot_init import bot
 from database.db_operations import get_clients_telegram_username, \
@@ -16,13 +21,15 @@ from database.db_operations import get_clients_telegram_username, \
     get_last_form_by_client, \
     get_first_order_date_by_client, \
     get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_info_by_product_name, \
-    get_order_number_by_asin, get_info_by_client, get_amounts_by_asin, get_amounts_by_order_number, get_asin
+    get_order_number_by_asin, get_info_by_client, get_amounts_by_asin, get_amounts_by_order_number, get_asin, \
+    get_telegram_user_id, get_telegram_id_by_username
 from filters.is_admin import is_admin
 from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_choose_client, \
-    set_choose_client_phone, set_choose_5_clients, set_back_to_menu
+    set_choose_client_phone, set_choose_5_clients, set_back_to_menu, set_choose_client_for_receipt, payment_button
+from lexicon.lexicon import LEXICON_RECEIPT
 from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_CHOOSE_CLIENT, LEXICON_NO_CLIENTS, \
     LEXICON_NEXT_5_CLIENTS, LEXICON_CLIENT_HAS_NO_DEBT, LEXICON_CLIENT_HAS_DEBT, \
-    LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT
+    LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT, LEXICON_RECEIPT_SENT
 from py_logger import get_logger
 from states.states_admin import AdminCallbackFactory, AdminStates
 
@@ -33,44 +40,95 @@ tech_support_chat_id = os.getenv('CHAT_ID')
 
 
 async def create_statistics_image(df: pd.DataFrame, file_path: str):
-    # Вычисляем размеры фигуры
-    height_per_row = 0.5
-    width_per_col = 1.7
-    fig_height = max(4, len(df) * height_per_row)
-    fig_width = max(8, len(df.columns) * width_per_col)
+    try:
+        # Вычисляем размеры фигуры
+        height_per_row = 0.5
+        width_per_col = 1.7
+        fig_height = max(4, len(df) * height_per_row)
+        fig_width = max(8, len(df.columns) * width_per_col)
 
-    # Создаем фигуру
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    ax.axis('off')
+        # Создаем фигуру
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        ax.axis('off')
 
-    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
+        table = ax.table(cellText=df.values, colLabels=df.columns, loc='center', cellLoc='center')
 
-    # Настройка внешнего вида таблицы
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.scale(1, 1.5)
+        # Настройка внешнего вида таблицы
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5)
 
-    # Настройка стилей ячеек
-    cell_colors = ['#d4e157', '#ffeb3b', '#ffee58', '#ffeb3b']  # Цвета для ячеек
-    for (i, j), cell in table.get_celld().items():
-        cell.set_edgecolor('black')
-        if i == 0:
-            cell.set_facecolor('#6c757d')  # Цвет заголовка
-            cell.set_text_props(weight='bold', color='white')
-        elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] == 0:
-            cell.set_facecolor('red')  # Красный цвет для строк с amount_paid = 0
-            cell.set_text_props(color='black')
-        elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] < df.iloc[i - 1]['Amount due']:
-            cell.set_facecolor('orange')  # Оранжевый цвет для строк с amount_paid < amount_due
-            cell.set_text_props(color='black')
-        else:
-            cell.set_facecolor(cell_colors[i % len(cell_colors)])
-            cell.set_text_props(color='black')
+        # Настройка стилей ячеек
+        cell_colors = ['#d4e157', '#ffeb3b', '#ffee58', '#ffeb3b']  # Цвета для ячеек
+        for (i, j), cell in table.get_celld().items():
+            cell.set_edgecolor('black')
+            if i == 0:
+                cell.set_facecolor('#6c757d')  # Цвет заголовка
+                cell.set_text_props(weight='bold', color='white')
+            elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] == 0:
+                cell.set_facecolor('red')  # Красный цвет для строк с amount_paid = 0
+                cell.set_text_props(color='black')
+            elif j == df.columns.get_loc('Amount paid') and df.iloc[i - 1]['Amount paid'] < df.iloc[i - 1][
+                'Amount due']:
+                cell.set_facecolor('orange')  # Оранжевый цвет для строк с amount_paid < amount_due
+                cell.set_text_props(color='black')
+            else:
+                cell.set_facecolor(cell_colors[i % len(cell_colors)])
+                cell.set_text_props(color='black')
 
-    # Сохраняем изображение
-    plt.savefig(file_path)
-    plt.close()
+        # Сохраняем изображение
+        plt.savefig(file_path)
+        plt.close()
 
+    except ValueError as e:
+        logger.error(f"Error in create_statistics_image: {e}")
+
+def generate_receipt(client_name, service_name, order_id, amount, receipt_id, date, output_filename):
+    # Преобразование списков в строки
+    service_name_str = ", ".join(service_name)
+    order_id_str = ", ".join(order_id)
+
+    # Создание PDF-документа
+    c = canvas.Canvas(output_filename, pagesize=A6)
+    width, height = A6
+
+    # Установка цветов и стилей
+    c.setStrokeColorRGB(0.2, 0.5, 0.3)
+    c.setFillColorRGB(0.2, 0.5, 0.3)
+    c.rect(0, height - inch * 0.5, width, inch * 0.4, fill=1)
+
+    # Заголовок чека
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColorRGB(1, 1, 1)
+    c.drawCentredString(width / 2.0, height - inch * 0.40, "Payment Receipt")
+
+    # ID чека и дата
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 10)
+    c.drawString(inch * 0.5, height - inch * 1.0, f"Receipt ID: {receipt_id}")
+    c.drawString(inch * 0.5, height - inch * 1.3, f"Date: {date}")
+
+    # Информация о клиенте
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(inch * 0.5, height - inch * 1.8, "Client Information")
+    c.setFont("Helvetica", 10)
+    c.drawString(inch * 0.5, height - inch * 2.1, f"Telegram username: {client_name}")
+
+    # Информация о услуге
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(inch * 0.5, height - inch * 2.6, "Service Information")
+    c.setFont("Helvetica", 10)
+    c.drawString(inch * 0.5, height - inch * 2.9, f"Order IDs: {order_id_str}")
+    c.drawString(inch * 0.5, height - inch * 3.2, f"Product names: {service_name_str}")
+    c.drawString(inch * 0.5, height - inch * 3.5, f"Amount: {amount:.2f}$")
+
+    # Подпись
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(inch * 0.5, inch * 0.5, "Thank you for your payment!")
+
+    # Сохранить PDF
+    c.showPage()
+    c.save()
 
 # Handler for "/admin" command
 @router.message(Command(commands=["admin"]))
@@ -253,8 +311,8 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
                 for asin in asins:
                     logger.info(f"ASIN: {asin}")
                     amount_details = await get_amounts_by_asin(asin)
-                    amount_due = amount_details[0]
-                    amount_paid = amount_details[1]
+                    amount_due = amount_details[1]
+                    amount_paid = amount_details[0]
                     order_num = await get_order_number_by_asin(asin)
 
                     orders_dict['Order №'].append(order_num[0])
@@ -434,8 +492,8 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
 
                 for asin in asins:
                     amounts = await get_amounts_by_asin(asin)
-                    amount_due = amounts[0]
-                    amount_paid = amounts[1]
+                    amount_due = float(amounts[1])
+                    amount_paid = float(amounts[0])
                     order_num = await get_order_number_by_asin(asin)
 
                     orders_dict['Order №'].append(order_num[0])
@@ -455,7 +513,6 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
                     orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
 
         df = pd.DataFrame(orders_dict)
-        print(df)
         df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
         df.sort_values(by='Order №', inplace=True)
         logger.info("Dataframe created successfully.")
@@ -463,11 +520,15 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
         # Создание и сохранение изображения
         file_path = f'images_reports/{client}_statistics.png'
         await create_statistics_image(df, file_path)
+        logger.info("Image created successfully.")
 
         # Отправка сообщения
         await bot.send_document(chat_id=callback.from_user.id, document=FSInputFile(file_path),
                                 reply_markup=set_back_to_menu(callback.from_user.language_code))
+        logger.info("Image sent successfully.")
+
         await pls_wait_message.delete()
+        logger.info("State cleared.")
 
         logger.info("Statistics sent successfully.")
 
@@ -687,3 +748,71 @@ async def back_to_admin_menu_2(callback: CallbackQuery):
         logger.error(f'Error in back_to_admin_menu_2: {e}')
         await callback.answer("An error occurred. Please try again later.")
 
+
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'receipt_text'))
+async def receipt_text(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info("receipt_text command")
+        await callback.message.delete()
+        clients = await get_clients_telegram_username()
+        # get unique clients
+        clients = list(set(clients))
+        await callback.message.answer(LEXICON_CHOOSE_CLIENT.get(callback.from_user.language_code, 'en'),
+                                      reply_markup=set_choose_client_for_receipt(clients))
+
+        await state.set_state(AdminStates.waiting_for_username_client)
+        logger.info("Waiting for client.")
+
+    except Exception as e:
+        logger.error(f'Error in receipt_text: {e}')
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'set_choose_client_for_receipt'))
+async def choose_client_for_receipt(callback: CallbackQuery, callback_data: AdminCallbackFactory, state: FSMContext):
+    try:
+        await callback.message.delete()
+        client_id = callback_data.client_id
+        logger.info(f"You chose client: {client_id}")
+
+        tg_user_id = await get_telegram_id_by_username(client_id)
+        logger.info(f"Telegram user ID: {tg_user_id}")
+
+        # Отримання інформації про клієнта
+        client_info = await get_info_by_client(client_id)
+        product_info = await get_product_name_by_client(client_id)
+        products_name = product_info[0]
+        logger.info(f"Product name: {products_name}")
+        order_ids = product_info[1]
+        logger.info(f"Order IDs: {order_ids}")
+        amount_due = client_info['amount_due']
+        amount_paid = client_info['amount_paid']
+        debt = client_info['debt']
+        receipt_id = '1234567890'
+        date = datetime.now().strftime('%Y-%m-%d')
+
+        if amount_due == amount_paid:
+            await callback.message.answer(LEXICON_CLIENT_HAS_NO_DEBT.get(callback.from_user.language_code, 'en').format(
+                client=client_id), reply_markup=set_back_to_menu(callback.from_user.language_code))
+            return
+
+        # Генерація PDF чека
+        output_filename = f"receipts/receipt_{client_id}.pdf"
+        generate_receipt(client_name=client_id, service_name=products_name, order_id=order_ids, amount=debt,
+                         receipt_id=receipt_id, date=date, output_filename=output_filename)
+
+        # Відправка PDF чека адміністратору
+        await bot.send_document(chat_id=callback.from_user.id, document=FSInputFile(output_filename),
+                                caption=LEXICON_RECEIPT_SENT.get(callback.from_user.language_code, 'en'),
+                                reply_markup=set_back_to_menu(callback.from_user.language_code))
+
+        # Відправка PDF чека користувачу
+        await bot.send_document(chat_id=tg_user_id, document=FSInputFile(output_filename),
+                                caption=LEXICON_RECEIPT.get(callback.from_user.language_code, 'en').format(
+                                    products_name=products_name, debt=debt), reply_markup=payment_button(amount=debt))
+
+        await state.clear()
+
+    except Exception as e:
+        logger.error(f'Error in choose_client_for_receipt: {e}')
+        await callback.answer("An error occurred. Please try again later.")

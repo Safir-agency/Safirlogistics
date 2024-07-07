@@ -66,6 +66,7 @@ async def save_form_fba(form_id):
 
     except Exception as e:
         logger.error(f"Error while saving form FBA to database: {e}")
+
 # Асинхронная функция сохранения заполненной формы в базу данных
 async def save_filled_form_to_db(product_name, ASIN, SET, NOT_SET, number_of_sets,
                                     number_of_units_in_set, number_of_units, FBA, FBM, phone_number, comment):
@@ -187,6 +188,14 @@ async def get_telegram_user_id(username):
     try:
         user = TelegramUsers.get(TelegramUsers.telegram_id == username)
         return user.id
+    except TelegramUsers.DoesNotExist:
+        print(f"User with username {username} not found.")
+        return None
+
+async def get_telegram_id_by_username(username):
+    try:
+        tg_id = TelegramUsers.get(TelegramUsers.telegram_username == username)
+        return tg_id.telegram_id
     except TelegramUsers.DoesNotExist:
         print(f"User with username {username} not found.")
         return None
@@ -391,21 +400,29 @@ async def get_product_name_by_client(telegram_username):
         user_id = TelegramUsers.select(TelegramUsers.id).where(
             TelegramUsers.telegram_username == telegram_username).scalar()
 
-        if user_id:
-            query = (Form.select(Form.product_name)
-                     .join(Clients, on=(Clients.form_id == Form.id))
-                     .where(Clients.telegram_id == user_id))
-            product_names = [product.product_name for product in query]
+        #get all not paid orders_id
+        not_paid_orders = (Payment.select(Payment.form_id)
+                           .join(Clients)
+                           .join(TelegramUsers)
+                           .where(TelegramUsers.id == user_id,
+                                  Payment.is_paid == False)).dicts()
 
-            # logger.info(f"All product names by client {telegram_username}: {product_names}")
-            return product_names
-        # else:
-        #     logger.error(f"No user found with username: {telegram_username}")
-        #     return []
+        #get all not paid product_names
+        product_names = []
+        for order in not_paid_orders:
+            form = Form.get(Form.id == order['form_id'])
+            product_names.append(form.product_name)
+
+        order_numbers = []
+        for order in not_paid_orders:
+            form = Form.get(Form.id == order['form_id'])
+            order_numbers.append(form.order_number)
+
+        return product_names, order_numbers
+
     except Exception as e:
-        logger.error(f"Error while getting all product names by client from database: {e}")
-        return []
-
+        logger.error(f"Error while getting product name by client from database: {e}")
+        return None
 
 async def get_asin(product_name):
     try:
@@ -701,3 +718,4 @@ async def get_clients_not_paid():
     except Exception as e:
         logger.error(f"Error while getting client from database: {e}")
         return None
+

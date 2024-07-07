@@ -71,10 +71,14 @@ def set_main_menu(user_id: int, lang) -> InlineKeyboardMarkup:
         text=LEXICON_BUTTON_TECHNICAL_SUPPORT.get(lang, 'en'),
         callback_data=ClientCallbackFactory(action="contacts").pack()
     )
+    # button_4 = InlineKeyboardButton(
+    #     text="Pay",
+    #     callback_data=ClientCallbackFactory(action="pay").pack())
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [button_1],
-            [button_2, button_3]
+            [button_2, button_3],
+            # [button_4]
         ]
     )
     return keyboard

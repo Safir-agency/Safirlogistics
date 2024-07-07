@@ -7,6 +7,7 @@ anyio==4.4.0
 attrs==23.2.0
 certifi==2024.2.2
 cffi==1.16.0
+chardet==5.2.0
 charset-normalizer==3.3.2
 click==8.1.7
 contourpy==1.2.1
@@ -51,11 +52,14 @@ pydantic_core==2.14.6
 Pygments==2.18.0
 pyOpenSSL==24.1.0
 pyparsing==3.1.2
+pypng==0.20220715.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-multipart==0.0.9
 pytz==2024.1
 PyYAML==6.0.1
+qrcode==7.4.2
+reportlab==4.2.2
 requests==2.31.0
 rich==13.7.1
 shellingham==1.5.4
