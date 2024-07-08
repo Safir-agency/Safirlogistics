@@ -205,8 +205,35 @@ def set_back_to_menu(lang) -> InlineKeyboardMarkup:
     )
     return keyboard
 
-def payment_button(amount: float) -> InlineKeyboardMarkup:
-    approval_url_paypal = create_payment(amount)
+# def payment_button(amount: float) -> InlineKeyboardMarkup:
+#     approval_url_paypal = create_payment(amount)
+#     approval_url_pioneer = 'https://login.payoneer.com/'
+#
+#     buttons = []
+#
+#     if approval_url_paypal:
+#         button_paypal = InlineKeyboardButton(
+#             text="Pay with PayPal",
+#             web_app=WebAppInfo(url=approval_url_paypal)
+#         )
+#         buttons.append([button_paypal])
+#     else:
+#         buttons.append([InlineKeyboardButton(text="Error: Unable to create PayPal payment", callback_data="error_paypal")])
+#
+#     if approval_url_pioneer:
+#         button_pioneer = InlineKeyboardButton(
+#             text="Pay with Payoneer",
+#             web_app=WebAppInfo(url=approval_url_pioneer)
+#         )
+#         buttons.append([button_pioneer])
+#     else:
+#         buttons.append([InlineKeyboardButton(text="Error: Unable to create Pioneer payment", callback_data="error_pioneer")])
+#
+#     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+#     return keyboard
+
+def payment_button() -> InlineKeyboardMarkup:
+    approval_url_paypal = 'https://www.paypal.com/donate/?hosted_button_id=AQNYY2MY7V5LY'
     approval_url_pioneer = 'https://login.payoneer.com/'
 
     buttons = []
@@ -214,7 +241,7 @@ def payment_button(amount: float) -> InlineKeyboardMarkup:
     if approval_url_paypal:
         button_paypal = InlineKeyboardButton(
             text="Pay with PayPal",
-            web_app=WebAppInfo(url=approval_url_paypal)
+            url=approval_url_paypal
         )
         buttons.append([button_paypal])
     else:
@@ -223,7 +250,7 @@ def payment_button(amount: float) -> InlineKeyboardMarkup:
     if approval_url_pioneer:
         button_pioneer = InlineKeyboardButton(
             text="Pay with Payoneer",
-            web_app=WebAppInfo(url=approval_url_pioneer)
+            url=approval_url_pioneer
         )
         buttons.append([button_pioneer])
     else:
@@ -231,4 +258,3 @@ def payment_button(amount: float) -> InlineKeyboardMarkup:
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
-

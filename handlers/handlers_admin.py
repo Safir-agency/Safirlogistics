@@ -83,6 +83,7 @@ async def create_statistics_image(df: pd.DataFrame, file_path: str):
     except ValueError as e:
         logger.error(f"Error in create_statistics_image: {e}")
 
+
 def generate_receipt(client_name, service_name, order_id, amount, receipt_id, date, output_filename):
     # Преобразование списков в строки
     service_name_str = ", ".join(service_name)
@@ -129,6 +130,7 @@ def generate_receipt(client_name, service_name, order_id, amount, receipt_id, da
     # Сохранить PDF
     c.showPage()
     c.save()
+
 
 # Handler for "/admin" command
 @router.message(Command(commands=["admin"]))
@@ -477,40 +479,42 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
         product_names = await get_product_name_by_client(client)
         registration_date = await get_first_order_date_by_client(client)
 
-        for order_number in orders_number:
-            for product in product_names:
-                get_info_by_prod = await get_info_by_product_name(product)
-                asins = await get_asin(product)
-                fba = get_info_by_prod['FBA']
-                fbm = get_info_by_prod['FBM']
-                number_of_units = get_info_by_prod['number_of_units']
-                comment = get_info_by_prod['comment']
-                set_flag = get_info_by_prod['SET']
-                no_set = get_info_by_prod['NOT_SET']
-                number_of_sets = get_info_by_prod['number_of_sets']
-                units_in_set = get_info_by_prod['number_of_units_in_set']
+        # for order_number in orders_number:
+        for product in product_names[0]:
+            print('Product:', product)
+            print('product_names:', product_names)
+            get_info_by_prod = await get_info_by_product_name(product)
+            asins = await get_asin(product)
+            fba = get_info_by_prod['FBA']
+            fbm = get_info_by_prod['FBM']
+            number_of_units = get_info_by_prod['number_of_units']
+            comment = get_info_by_prod['comment']
+            set_flag = get_info_by_prod['SET']
+            no_set = get_info_by_prod['NOT_SET']
+            number_of_sets = get_info_by_prod['number_of_sets']
+            units_in_set = get_info_by_prod['number_of_units_in_set']
 
-                for asin in asins:
-                    amounts = await get_amounts_by_asin(asin)
-                    amount_due = float(amounts[1])
-                    amount_paid = float(amounts[0])
-                    order_num = await get_order_number_by_asin(asin)
+            for asin in asins:
+                amounts = await get_amounts_by_asin(asin)
+                amount_due = float(amounts[1])
+                amount_paid = float(amounts[0])
+                order_num = await get_order_number_by_asin(asin)
 
-                    orders_dict['Order №'].append(order_num[0])
-                    orders_dict['Clients'].append(client)
-                    orders_dict['Product name'].append(product)
-                    orders_dict['FBA'].append('Yes' if fba else 'No')
-                    orders_dict['FBM'].append('Yes' if fbm else 'No')
-                    orders_dict['ASIN'].append(asin)
-                    orders_dict['Number of units'].append(number_of_units)
-                    orders_dict['Comment'].append(comment if comment else 'None')
-                    orders_dict['Set'].append('Yes' if set_flag else 'No')
-                    orders_dict['No set'].append('Yes' if no_set else 'No')
-                    orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
-                    orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
-                    orders_dict['Amount due'].append(amount_due)
-                    orders_dict['Amount paid'].append(amount_paid)
-                    orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
+                orders_dict['Order №'].append(order_num[0])
+                orders_dict['Clients'].append(client)
+                orders_dict['Product name'].append(product)
+                orders_dict['FBA'].append('Yes' if fba else 'No')
+                orders_dict['FBM'].append('Yes' if fbm else 'No')
+                orders_dict['ASIN'].append(asin)
+                orders_dict['Number of units'].append(number_of_units)
+                orders_dict['Comment'].append(comment if comment else 'None')
+                orders_dict['Set'].append('Yes' if set_flag else 'No')
+                orders_dict['No set'].append('Yes' if no_set else 'No')
+                orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
+                orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
+                orders_dict['Amount due'].append(amount_due)
+                orders_dict['Amount paid'].append(amount_paid)
+                orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
 
         df = pd.DataFrame(orders_dict)
         df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
@@ -809,7 +813,7 @@ async def choose_client_for_receipt(callback: CallbackQuery, callback_data: Admi
         # Відправка PDF чека користувачу
         await bot.send_document(chat_id=tg_user_id, document=FSInputFile(output_filename),
                                 caption=LEXICON_RECEIPT.get(callback.from_user.language_code, 'en').format(
-                                    products_name=products_name, debt=debt), reply_markup=payment_button(amount=debt))
+                                    products_name=products_name, debt=debt), reply_markup=payment_button())
 
         await state.clear()
 
