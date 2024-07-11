@@ -1,1 +1,2 @@
-web: uvicorn bot:app --port ${PORT:-8081} --host 0.0.0.0
+# TODO: Modify this Procfile to fit your needs
+web: gunicorn bot:app

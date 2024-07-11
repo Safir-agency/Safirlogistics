@@ -15,6 +15,7 @@ class ClientStates(StatesGroup):
     waiting_for_product_name = State()
     waiting_for_number_of_units = State()
     waiting_for_number_of_sets = State()
+    waiting_for_amount = State()
 
 
 class TechSupportStates(StatesGroup):

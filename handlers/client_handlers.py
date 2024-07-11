@@ -1,35 +1,33 @@
+import json
 import os
-
+import pytz
+from datetime import datetime
 from aiogram import Router, F, types
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, BufferedInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.methods import SendVideo, SendAudio, SendVoice, SendPhoto, SendDocument
+from aiogram.types import CallbackQuery, Message, BufferedInputFile
+from emoji import emojize
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from matplotlib import font_manager
+import pandas as pd
+from aiogram.types import FSInputFile
 
-from create_bot import bot
-from database.db_operations import save_user_to_db, save_application_to_db, save_client_to_db, change_fba_status, \
-    change_fbm_status, save_user_tech_support
+from bot_init import bot
+from config_data.config import Config, load_config
+from database.db_operations import save_user_to_db, save_user_tech_support, save_filled_form_to_db
 from database.models import TelegramUsers
 from keyboards.keyboard_admin import set_answer_to_client
-
 from keyboards.keyboards_client import set_main_menu, set_back_button, \
-    choose_fba_or_fbm, set_or_not_set, end_conversation_button
-
-from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, LEXICON_NAME_OF_PRODUCT, \
-    LEXICON_CHOOSE_FBM_OR_FBA, LEXICON_ASIN, LEXICON_SET_OR_NOT_SET, LEXICON_NUMBER_OF_UNITS_NOT_SET, \
-    LEXICON_NUMBER_OF_SETS, LEXICON_NUMBER_OF_UNITS_IN_SET, \
-    LEXICON_PHONE_NUMBER, LEXICON_END_APPLICATION, LEXICON_CHOOSE_AN_ACTION, LEXICON_MESSAGE_SEND
-from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER
-from states.states_admin import AdminCallbackFactory
-
-from states.states_client import ClientCallbackFactory, ClientStates, TechSupportStates
-from emoji import emojize
-
-from utils.utils import custom_validate_phone, fetch_user_ip, fetch_user_location
-
-from config_data.config import Config, load_config
-
+    end_conversation_button, paypal_button, form_button
+from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_END_CONVERSATION, \
+    LEXICON_CHOOSE_AN_ACTION, LEXICON_MESSAGE_SEND, \
+    LEXICON_AMOUNT_TO_PAY, LEXICON_RULES_START_WORK_WITH_US, LEXICON_THANKS_FOR_FORM
+from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER, LEXICON_FORM_INFO_FROM_CLIENT
 from py_logger import get_logger
+from services.paypal import create_payment
+from states.states_client import ClientCallbackFactory, ClientStates, TechSupportStates
 
 logger = get_logger(__name__)
 
@@ -40,7 +38,91 @@ WEB_APP_URL = os.getenv('WEB_APP_URL')
 tech_support_chat_id = os.getenv('CHAT_ID')
 
 ''' Client main menu '''
+font_path = font_manager.findSystemFonts(fontpaths=None, fontext='ttf')
+dejavu_font_path = next((path for path in font_path if 'dejavusans' in path.lower()), None)
 
+
+def create_form_image(form_data, username, current_date):
+    data = {
+        "Field": ["Product Name", "ASIN", "Phone Number", "FBA", "FBM", "Number of Units", "SET",
+                  "Number of Units in SET", "Number of SETs", "Comment"],
+        "Value": [
+            form_data.get("product_name", "No"),
+            form_data.get("ASIN", "No"),
+            form_data.get("phone_number", "No"),
+            "Yes" if form_data.get("FBA", False) else "No",
+            "Yes" if form_data.get("FBM", False) else "No",
+            form_data.get("FBA_details", {}).get("number_of_units", "0") if form_data.get("FBA", False) else form_data.get(
+                "FBM_details", {}).get("number_of_units", "0"),
+            "Yes" if (form_data.get("FBA", False) and form_data.get("FBA_details", {}).get("SET", False)) or (
+                    form_data.get("FBM", False) and form_data.get("FBM_details", {}).get("SET", False)) else "No",
+            form_data.get("FBA_details", {}).get("number_of_units_in_set", "0") if form_data.get("FBA", False) else form_data.get(
+                "FBM_details", {}).get("number_of_units_in_set", "0"),
+            form_data.get("FBA_details", {}).get("number_of_sets", "0") if form_data.get("FBA", False) else form_data.get(
+                "FBM_details", {}).get("number_of_sets", "0"),
+            form_data.get("FBA_details", {}).get("comment", "No comment") if form_data.get("FBA", False) else form_data.get(
+                "FBM_details", {}).get("comment", "No comment")
+        ]
+    }
+
+    df = pd.DataFrame(data)
+
+    fig, ax = plt.subplots(figsize=(8, 10))
+    ax.axis('off')
+
+    # Table cell colors
+    cell_colors = [["#d0f0c0", "#f0e68c"] for _ in range(len(df))]
+
+    # Create table
+    table = ax.table(cellText=df.values, cellLoc='center', loc='center', cellColours=cell_colors, bbox=[0, 0, 1, 1])
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1.2, 1.2)
+
+    # Make the headers bold and larger
+    for key, cell in table.get_celld().items():
+        cell.set_text_props(fontsize=14, weight='bold' if key[1] == 0 else 'normal')
+
+    # Add title
+    title = f"Form filled by {username} on {current_date}"
+    plt.title(title, fontsize=16, weight='bold')
+
+    plt.tight_layout()
+    return fig
+@router.message(CommandStart())
+async def start(message):
+    try:
+        logger.info(f"Start command from user {message.from_user.id}")
+        user_id = message.from_user.id
+
+        user_data = {
+            'telegram_id': message.from_user.id,
+            'telegram_username': message.from_user.username,
+            'telegram_fullname': message.from_user.full_name,
+            'telegram_lang': message.from_user.language_code
+        }
+
+        # Save to db
+        user_instance = TelegramUsers(**user_data)
+        await save_user_to_db(user_instance)
+
+        keyboard = set_main_menu(user_id=message.from_user.id, lang=message.from_user.language_code)
+        welcome_text = LEXICON_START.get(message.from_user.language_code, LEXICON_START['en']).format(
+            emojize(":smiling_face_with_smiling_eyes:") + emojize(":smiling_face_with_smiling_eyes"))
+
+        # Create an instance of BufferedInputFile from the file
+        photo_input_file = BufferedInputFile.from_file(path='./assets/prev.webp')
+
+        # Send the photo
+        await bot.send_photo(chat_id=message.chat.id,
+                             photo=photo_input_file,
+                             caption=welcome_text,
+                             reply_markup=keyboard)
+
+    except ValueError as e:
+        logger.error(f"Error while sending start message: {e}")
+        await message.answer("An error occurred. Please try again later.")
 
 @router.message(CommandStart())
 async def start(message):
@@ -214,6 +296,7 @@ async def tech_support_conversation(message: Message, state: FSMContext):
 
 """Answer from technical support """
 
+
 @router.callback_query(ClientCallbackFactory.filter(F.action == 'answer_to_client'))
 async def answer_to_client_btn(callback: CallbackQuery, state: FSMContext):
     try:
@@ -246,4 +329,135 @@ async def end_conversation(message: Message):
             reply_markup=set_main_menu(user_id=message.from_user.id, lang=message.from_user.language_code))
     except ValueError as e:
         logger.error(f"Error while sending end conversation message: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+"""Payment"""
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'pay'))
+async def waiting_for_amount(callback: CallbackQuery, state: FSMContext):
+    try:
+        logger.info(f"Payment command from user {callback.from_user.id}")
+
+        await callback.answer()
+        await callback.message.answer(LEXICON_AMOUNT_TO_PAY.get(
+            callback.from_user.language_code,
+            LEXICON_AMOUNT_TO_PAY['en']))
+
+        await state.set_state(ClientStates.waiting_for_amount)
+
+    except Exception as e:
+        logger.error(f"Error while processing payment: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_amount)
+async def payment(message: types.Message, state: FSMContext):
+    try:
+        logger.info(f"Processing payment for user {message.from_user.id}")
+        amount = float(message.text)
+        if amount <= 0:
+            await message.answer("Please enter a valid amount.")
+            return
+
+        approval_url = create_payment(amount)
+
+        keyboard = paypal_button(amount=amount, lang=message.from_user.language_code)
+        if approval_url:
+            await message.answer("Click the button below to pay with PayPal.", reply_markup=keyboard)
+        else:
+            await message.answer("Error: Unable to create payment.")
+
+        await state.clear()
+
+    except ValueError as e:
+        logger.error(f"Error while processing payment: {e}")
+        await message.answer("An error occurred. Please try again later.")
+
+
+"""Submit an application"""
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'start_work_with_us'))
+async def submit_an_application(callback: CallbackQuery):
+    try:
+        logger.info(f"Submit an application command from user {callback.from_user.id}")
+        # await callback.message.delete()
+
+        keyboard = form_button(user_id=callback.from_user.id, lang=callback.from_user.language_code)
+
+        start_work = await callback.message.answer(LEXICON_RULES_START_WORK_WITH_US.get(
+            callback.from_user.language_code,
+            LEXICON_RULES_START_WORK_WITH_US['en']),
+            reply_markup=keyboard)
+
+    except ValueError as e:
+        logger.error(f"Error while sending submit an application message: {e}")
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.message(F.content_type == types.ContentType.WEB_APP_DATA)
+async def web_app_data_handler(message: types.Message):
+    try:
+        logger.info(f"Received data from web app: {message.web_app_data}")
+
+        web_app_data = message.web_app_data
+        data = web_app_data.data
+
+        # Deserialize the JSON data
+        data_dict = json.loads(data)
+        form_data = data_dict.get("formData", {})
+
+        product_name = form_data.get("product_name")
+        ASIN = form_data.get("ASIN")
+        phone_number = form_data.get("phone_number", "")
+        FBA = form_data.get("FBA", False)
+        FBM = form_data.get("FBM", False)
+
+        if FBA:
+            details = form_data.get("FBA_details", {})
+        elif FBM:
+            details = form_data.get("FBM_details", {})
+        else:
+            details = {}
+
+        number_of_units = details.get("number_of_units", 0)
+        SET = details.get("SET", False)
+        number_of_units_in_set = details.get("number_of_units_in_set", 0)
+        number_of_sets = details.get("number_of_sets", 0)
+        comment = details.get("comment", "")
+
+        user_id = message.from_user.id
+        await bot.send_message(text=LEXICON_THANKS_FOR_FORM.get(
+            message.from_user.language_code,
+            LEXICON_THANKS_FOR_FORM['en']),
+            chat_id=user_id,
+            reply_markup=set_main_menu(user_id, message.from_user.language_code))
+        logger.info(f"User {user_id} sent data from web app: {data}")
+
+        await bot.send_message(chat_id=tech_support_chat_id,
+                               text=LEXICON_FORM_INFO_FROM_CLIENT.get(
+                                   message.from_user.language_code,
+                                   LEXICON_FORM_INFO_FROM_CLIENT['en']).format(
+                                   username=message.from_user.username))
+
+        await save_filled_form_to_db(product_name=product_name,
+                                     ASIN=ASIN, SET=SET, NOT_SET=not SET,
+                                     number_of_sets=number_of_sets,
+                                     number_of_units_in_set=number_of_units_in_set,
+                                     number_of_units=number_of_units, FBA=FBA,
+                                     FBM=FBM, phone_number=phone_number,
+                                     comment=comment)
+
+        # Create and send the image
+        image = create_form_image(form_data, message.from_user.username,
+                                  datetime.now(pytz.timezone("Europe/Kiev")).strftime("%Y-%m-%d"))
+        image_path = f'filled_forms/form_{message.from_user.username}_{datetime.now(pytz.timezone("Europe/Kiev")).strftime("%Y-%m-%d_%H-%M-%S")}.png'
+        image.savefig(image_path)
+
+        await bot.send_photo(chat_id=tech_support_chat_id, photo=FSInputFile(image_path))
+
+    except ValueError as e:
+        logger.error(f"Error while processing web app data: {e}")
         await message.answer("An error occurred. Please try again later.")

@@ -229,3 +229,22 @@ LEXICON_NO_NOT_PAID_ORDERS = {
     'en': "<b>No unpaid orders 🤷‍</b>",
     'uk': "<b>Не оплачених замовлень немає 🤷‍</b>"
 }
+
+LEXICON_FORM_INFO_FROM_CLIENT = {
+    'ru': "<b>Клиент с @{username} заполнил форму:</b>",
+    'en': "<b>Client with @{username} filled out the form:</b>",
+    'uk': "<b>Клієнт з @{username} заповнив форму:</b>"
+}
+
+LEXICON_GIVE_CLIENT_PAYMENT_INFO = {
+    'ru': "Выслать клиенту чек об оплате 🧾",
+    'en': "Send the client a payment receipt 🧾",
+    'uk': "Вислати клієнту чек про оплату 🧾"
+}
+
+LEXICON_RECEIPT_SENT = {
+    'ru': "<b>Чек успешно отправлен клиенту ✅</b>",
+    'en': "<b>Receipt sent successfully to the client ✅</b>",
+    'uk': "<b>Чек успішно відправлений клієнту ✅</b>"
+}
+
