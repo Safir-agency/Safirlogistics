@@ -294,44 +294,44 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
         registration_date = await get_first_order_date_by_client(client)
         logger.info(f"Registration date: {registration_date}")
 
-        for order_number in orders_number:
-            logger.info(f"Order number: {order_number}")
-            for product in product_names:
-                logger.info(f"Product name: {product}")
-                get_info_by_prod = await get_info_by_product_name(product)
-                asins = await get_asin(product)
-                fba = get_info_by_prod['FBA']
-                fbm = get_info_by_prod['FBM']
-                number_of_units = get_info_by_prod['number_of_units']
-                comment = get_info_by_prod['comment']
-                set_flag = get_info_by_prod['SET']
-                no_set = get_info_by_prod['NOT_SET']
-                number_of_sets = get_info_by_prod['number_of_sets']
-                units_in_set = get_info_by_prod['number_of_units_in_set']
-                logger.info(f"Get info by product: {get_info_by_prod}")
+        # for order_number in orders_number:
+        #     logger.info(f"Order number: {order_number}")
+        for product in product_names:
+            logger.info(f"Product name: {product}")
+            get_info_by_prod = await get_info_by_product_name(product)
+            asins = await get_asin(product)
+            fba = get_info_by_prod['FBA']
+            fbm = get_info_by_prod['FBM']
+            number_of_units = get_info_by_prod['number_of_units']
+            comment = get_info_by_prod['comment']
+            set_flag = get_info_by_prod['SET']
+            no_set = get_info_by_prod['NOT_SET']
+            number_of_sets = get_info_by_prod['number_of_sets']
+            units_in_set = get_info_by_prod['number_of_units_in_set']
+            logger.info(f"Get info by product: {get_info_by_prod}")
 
-                for asin in asins:
-                    logger.info(f"ASIN: {asin}")
-                    amount_details = await get_amounts_by_asin(asin)
-                    amount_due = amount_details[1]
-                    amount_paid = amount_details[0]
-                    order_num = await get_order_number_by_asin(asin)
+            for asin in asins:
+                logger.info(f"ASIN: {asin}")
+                amounts = await get_amounts_by_asin(asin)
+                amount_due = float(amounts[1])
+                amount_paid = float(amounts[0])
+                order_num = await get_order_number_by_asin(asin)
 
-                    orders_dict['Order №'].append(order_num[0])
-                    orders_dict['Clients'].append(client)
-                    orders_dict['Product name'].append(product)
-                    orders_dict['FBA'].append('Yes' if fba else 'No')
-                    orders_dict['FBM'].append('Yes' if fbm else 'No')
-                    orders_dict['ASIN'].append(asin)
-                    orders_dict['Number of units'].append(number_of_units)
-                    orders_dict['Comment'].append(comment if comment else 'None')
-                    orders_dict['Set'].append('Yes' if set_flag else 'No')
-                    orders_dict['No set'].append('Yes' if no_set else 'No')
-                    orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
-                    orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
-                    orders_dict['Amount due'].append(amount_due)
-                    orders_dict['Amount paid'].append(amount_paid)
-                    orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
+                orders_dict['Order №'].append(order_num[0])
+                orders_dict['Clients'].append(client)
+                orders_dict['Product name'].append(product)
+                orders_dict['FBA'].append('Yes' if fba else 'No')
+                orders_dict['FBM'].append('Yes' if fbm else 'No')
+                orders_dict['ASIN'].append(asin)
+                orders_dict['Number of units'].append(number_of_units)
+                orders_dict['Comment'].append(comment if comment else 'None')
+                orders_dict['Set'].append('Yes' if set_flag else 'No')
+                orders_dict['No set'].append('Yes' if no_set else 'No')
+                orders_dict['Number of sets'].append(number_of_sets if number_of_sets else 0)
+                orders_dict['Units in set'].append(units_in_set if units_in_set else 0)
+                orders_dict['Amount due'].append(amount_due)
+                orders_dict['Amount paid'].append(amount_paid)
+                orders_dict['Registration date'].append(registration_date.strftime('%d-%m-%Y'))
 
         df = pd.DataFrame(orders_dict)
         df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
