@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
-from aiogram import types
+from aiogram import types, Dispatcher
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,15 +41,16 @@ logger.info(f'WEB_SERVER_PORT: {WEB_SERVER_PORT}')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+    # Установка вебхука
+    response = await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+    logger.info(f"Webhook set: {response}")
     yield
     await bot.delete_webhook()
+    logger.info("Webhook deleted")
 
 
 app = FastAPI(lifespan=lifespan)
 logger.info("App is starting...")
-
-# app.include_router(payment_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,6 +78,7 @@ async def bot_webhook(update: dict):
     logger.debug("Bot received data from Telegram Server")
     telegram_update = types.Update(**update)
     await dp.feed_update(bot=bot, update=telegram_update)
+    return {"status": "ok"}
 
 
 def main():
