@@ -1,6 +1,10 @@
 import os
 from datetime import datetime
+import asyncio
+from aiogram import types
 
+from keyboards.keyboards_client import send_screenshot_keyboard
+from services.binance import create_usdt_address, check_payment_status
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
@@ -22,16 +26,20 @@ from database.db_operations import get_clients_telegram_username, \
     get_first_order_date_by_client, \
     get_quantity_of_orders_by_client, get_order_number_by_client, sum_units_by_client, get_info_by_product_name, \
     get_order_number_by_asin, get_info_by_client, get_amounts_by_asin, get_amounts_by_order_number, get_asin, \
-    get_telegram_user_id, get_telegram_id_by_username
+    get_telegram_user_id, get_telegram_id_by_username, get_form_id_by_asin, \
+    get_last_form_id_by_asin, update_amount_due, get_asin_by_tg_id
 from filters.is_admin import is_admin
 from keyboards.keyboard_admin import set_admin_menu, set_statistics_menu, set_choose_client, \
-    set_choose_client_phone, set_choose_5_clients, set_back_to_menu, set_choose_client_for_receipt, payment_button
-from lexicon.lexicon import LEXICON_RECEIPT
+    set_choose_client_phone, set_choose_5_clients, set_back_to_menu, set_choose_client_for_receipt, \
+    payment_button_binance, set_choose_client_for_change_amount_due, set_choose_asin
+from lexicon.lexicon import LEXICON_RECEIPT, LEXICON_USDT_ADDRESS
 from lexicon.lexicon_admin import LEXICON_CHOOSE_ACTION, LEXICON_NO_ACCESS, LEXICON_CHOOSE_CLIENT, LEXICON_NO_CLIENTS, \
     LEXICON_NEXT_5_CLIENTS, LEXICON_CLIENT_HAS_NO_DEBT, LEXICON_CLIENT_HAS_DEBT, \
-    LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT, LEXICON_RECEIPT_SENT
+    LEXICON_STATISTICS_SEND_SUCCESS, LEXICON_PLEASE_WAIT, LEXICON_RECEIPT_SENT, LEXICON_PRICE, LEXICON_DB_PRICE_UPDATED, \
+    LEXICON_WRONG_INPUT, LEXICON_WRONG_ASIN, LEXICON_CHOOSE_ASIN
 from py_logger import get_logger
 from states.states_admin import AdminCallbackFactory, AdminStates
+from states.states_client import ClientStates, ClientCallbackFactory
 
 logger = get_logger(__name__)
 
@@ -262,7 +270,7 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
         logger.info("Creating statistics by clients in Excel format")
 
         await state.clear()
-        await callback.message.delete()
+        # await callback.message.delete()
         pls_wait_message = await callback.message.answer(
             LEXICON_PLEASE_WAIT.get(callback.from_user.language_code, 'en'))
 
@@ -288,15 +296,15 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
         logger.info(f"Client: {client}")
 
         orders_number = await get_order_number_by_client(client)
-        logger.info(f"Orders number: {orders_number}")
         product_names = await get_product_name_by_client(client)
-        logger.info(f"Product names: {product_names}")
         registration_date = await get_first_order_date_by_client(client)
+        logger.info(f"Product names: {product_names}")
         logger.info(f"Registration date: {registration_date}")
+        logger.info(f"Orders number: {orders_number}")
 
         # for order_number in orders_number:
         #     logger.info(f"Order number: {order_number}")
-        for product in product_names:
+        for product in product_names[0]:
             logger.info(f"Product name: {product}")
             get_info_by_prod = await get_info_by_product_name(product)
             asins = await get_asin(product)
@@ -337,6 +345,7 @@ async def process_statistics_by_one_client_excel(callback: CallbackQuery, callba
         df.drop_duplicates(subset=['ASIN', 'Product name'], inplace=True)
         df.sort_values(by='Clients', inplace=True)
         df.sort_values(by='Order №', inplace=True)
+        print(df)
 
         # Specify the filename and create an Excel writer object
         file_name = f"excel_reports/{client}_statistics_{datetime.now(pytz.timezone('Europe/Kiev')).strftime('%d-%m-%Y')}.xlsx"
@@ -478,11 +487,13 @@ async def process_statistics_by_one_client_tg(callback: CallbackQuery, callback_
         orders_number = await get_order_number_by_client(client)
         product_names = await get_product_name_by_client(client)
         registration_date = await get_first_order_date_by_client(client)
+        logger.info(f"Product names: {product_names}")
+        logger.info(f"Registration date: {registration_date}")
+        logger.info(f"Orders number: {orders_number}")
 
         # for order_number in orders_number:
         for product in product_names[0]:
-            print('Product:', product)
-            print('product_names:', product_names)
+            logger.info(f"Product name: {product}")
             get_info_by_prod = await get_info_by_product_name(product)
             asins = await get_asin(product)
             fba = get_info_by_prod['FBA']
@@ -813,10 +824,129 @@ async def choose_client_for_receipt(callback: CallbackQuery, callback_data: Admi
         # Відправка PDF чека користувачу
         await bot.send_document(chat_id=tg_user_id, document=FSInputFile(output_filename),
                                 caption=LEXICON_RECEIPT.get(callback.from_user.language_code, 'en').format(
-                                    products_name=products_name, debt=debt), reply_markup=payment_button())
+                                    products_name=products_name, debt=debt),
+                                reply_markup=payment_button_binance(lang=callback.from_user.language_code))
 
         await state.clear()
 
     except Exception as e:
         logger.error(f'Error in choose_client_for_receipt: {e}')
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'pay_with_binance_usdt'))
+async def handle_pay_in_usdt(callback_query: types.CallbackQuery, callback_data: AdminCallbackFactory,
+                             state: FSMContext):
+    try:
+        # Send address to user
+        usdt_address = '0x3Aa08E351e2fbdc710Ab4C1f63f7437499D31192'
+
+        await callback_query.message.answer(LEXICON_USDT_ADDRESS.get(
+            callback_query.from_user.language_code, 'en').format(address=usdt_address),
+                                            reply_markup=send_screenshot_keyboard(
+                                                callback_query.from_user.language_code))
+
+    except Exception as e:
+        logger.error(f'Error in handle_pay_in_usdt: {e}')
+        await callback_query.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(ClientCallbackFactory.filter(F.action == 'enter_asin'))
+async def set_service_price(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.delete()
+
+        await callback.message.answer(LEXICON_ENTER_ASIN.get(callback.from_user.language_code, 'en'))
+
+        await state.set_state(ClientStates.waiting_for_asin)
+    except Exception as e:
+        logger.error(f'Error in set_service_price: {e}')
+        await callback.answer("An error occurred. Please try again later.")
+
+@router.message(ClientStates.waiting_for_asin)
+async def process_asin(message: Message, state: FSMContext):
+    try:
+        asin = message.text
+
+        form_id = await get_last_form_id_by_asin(asin)
+        logger.info(f"Form ID: {form_id}")
+
+        if not form_id:
+            await message.answer(LEXICON_WRONG_ASIN.get(
+                message.from_user.language_code, 'en'))
+            return
+
+        await state.update_data(form_id=form_id)
+        await message.answer(LEXICON_PRICE.get(
+            message.from_user.language_code, 'en'))
+        await state.set_state(ClientStates.waiting_for_amount_due)
+    except Exception as e:
+        logger.error(f'Error in process_asin: {e}')
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.message(ClientStates.waiting_for_amount_due)
+async def process_amount_due(message: Message, state: FSMContext):
+    try:
+
+        data = await state.get_data()
+        form_id = data.get('form_id')
+        print('form_id:', form_id)
+
+        amount_due = message.text
+
+        # если amount_due не является числом
+        if not amount_due.isdigit():
+            await message.answer(LEXICON_WRONG_INPUT.get(
+                message.from_user.language_code, 'en'))
+        else:
+            await update_amount_due(form_id, amount_due)
+
+        await message.answer(LEXICON_DB_PRICE_UPDATED.get(
+            message.from_user.language_code, 'en').format(amount_due=amount_due))
+
+    except Exception as e:
+        logger.error(f'Error in process_amount_due: {e}')
+        await message.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'change_amount_due'))
+async def change_amount_due(callback: CallbackQuery, state: FSMContext):
+    try:
+        # await callback.message.delete()
+        clients = await get_clients_telegram_username()
+        clients = list(set(clients))
+
+        await bot.send_message(callback.from_user.id, LEXICON_CHOOSE_ASIN.get(
+            callback.from_user.language_code, 'en'),
+                         reply_markup=set_choose_client_for_change_amount_due(clients))
+
+        await state.set_state(AdminStates.waiting_for_username_client_to_change_amount)
+
+    except Exception as e:
+        logger.error(f'Error in change_amount_due: {e}')
+        await callback.answer("An error occurred. Please try again later.")
+
+
+@router.callback_query(AdminCallbackFactory.filter(F.action == 'set_choose_client_for_change_amount_due'))
+async def choose_client_for_change_amount_due(callback: CallbackQuery, callback_data: AdminCallbackFactory, state: FSMContext):
+    try:
+        # await callback.message.delete()
+        client_id = callback_data.client_id
+        logger.info(f"You chose client: {client_id}")
+
+        tg_user_id = await get_telegram_id_by_username(client_id)
+        logger.info(f"Telegram user ID: {tg_user_id}")
+
+        asins = await get_asin_by_tg_id(tg_user_id)
+        print(asins)
+
+        await bot.send_message(tg_user_id, text=f'You chose client: {client_id}')
+
+        await bot.send_message(tg_user_id, LEXICON_CHOOSE_ASIN.get(
+            callback.from_user.language_code, 'en'),
+                            reply_markup=set_choose_asin(asins))
+
+    except Exception as e:
+        logger.error(f'Error in choose_client_for_change_amount_due: {e}')
         await callback.answer("An error occurred. Please try again later.")

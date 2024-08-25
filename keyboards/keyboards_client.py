@@ -8,7 +8,8 @@ from aiogram.utils.web_app import WebAppInitData
 
 from lexicon.lexicon import LEXICON_BUTTON_SUBMIT_AN_APPLICATION, LEXICON_BUTTON_OUR_PRICE, \
     LEXICON_BUTTON_TECHNICAL_SUPPORT, LEXICON_BUTTON_SHARE_NUMBER, LEXICON_BUTTON_BACK_TO_MAIN_MENU, \
-    LEXICON_END_CONVERSATION_BUTTON, LEXICON_START_WORK_WITH_US
+    LEXICON_END_CONVERSATION_BUTTON, LEXICON_START_WORK_WITH_US, LEXICON_SEND_SCREENSHOT
+from lexicon.lexicon_admin import LEXICON_ANSWER_TO_CLIENT
 from services.paypal import create_payment
 from states.states_client import ClientCallbackFactory
 from config_data.config import Config, load_config
@@ -71,14 +72,10 @@ def set_main_menu(user_id: int, lang) -> InlineKeyboardMarkup:
         text=LEXICON_BUTTON_TECHNICAL_SUPPORT.get(lang, 'en'),
         callback_data=ClientCallbackFactory(action="contacts").pack()
     )
-    # button_4 = InlineKeyboardButton(
-    #     text="Pay",
-    #     callback_data=ClientCallbackFactory(action="pay").pack())
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [button_1],
             [button_2, button_3],
-            # [button_4]
         ]
     )
     return keyboard
@@ -116,9 +113,10 @@ def set_back_button(lang) -> InlineKeyboardMarkup:
 def end_conversation_button(lang) -> ReplyKeyboardMarkup:
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=LEXICON_END_CONVERSATION_BUTTON.get(lang, 'en'))]
+            [KeyboardButton(text=LEXICON_END_CONVERSATION_BUTTON.get(lang, 'End Conversation'))]
         ],
         resize_keyboard=True,
+        one_time_keyboard=True
     )
     return keyboard
 
@@ -136,3 +134,34 @@ def paypal_button(amount: float, lang) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Error: Unable to create payment", callback_data="error")]
         ])
+
+# def pay_in_usdt_button(amount: float, lang) -> InlineKeyboardMarkup:
+#     button_4 = InlineKeyboardButton(
+#         text="Pay in USDT",
+#         callback_data=ClientCallbackFactory(action="pay_in_usdt").pack()
+#     )
+#     keyboard = InlineKeyboardMarkup(inline_keyboard=[[button_4]])
+#     return keyboard
+
+def support_keyboard(lang) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=LEXICON_ANSWER_TO_CLIENT.get(lang, 'en'),
+                                     callback_data=ClientCallbackFactory(action="answer_to_client").pack())
+            ]
+        ]
+    )
+    return keyboard
+
+
+def send_screenshot_keyboard(lang) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=LEXICON_SEND_SCREENSHOT.get(lang, 'en'),
+                                     callback_data=ClientCallbackFactory(action="send_screenshot").pack())
+            ]
+        ]
+    )
+    return keyboard

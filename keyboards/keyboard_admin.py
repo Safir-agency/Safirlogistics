@@ -9,13 +9,14 @@ from lexicon.lexicon_admin import LEXICON_BUTTON_STATISTICS, LEXICON_LOOK_FOR_CL
     LEXICON_STATISTIC_CLIENTS_TELEGRAM, LEXICON_STATISTIC_CLIENTS_EXCEL, LEXICON_STATISTIC_BY_CLIENT_TG, \
     LEXICON_STATISTIC_BY_CLIENT_EXCEL, LEXICON_BY_LAST_7_DAYS, LEXICON_BY_LAST_30_DAYS, LEXICON_LAST_HALF_YEAR, \
     LEXICON_LAST_1_YEAR, LEXICON_ANSWER_TO_CLIENT, \
-    LEXICON_ADD_5_CLIENTS, LEXICON_BACK_TO_MENU, LEXICON_BACK_TO_PREVIOUS_CLIENTS, LEXICON_GIVE_CLIENT_PAYMENT_INFO
+    LEXICON_ADD_5_CLIENTS, LEXICON_BACK_TO_MENU, LEXICON_BACK_TO_PREVIOUS_CLIENTS, LEXICON_GIVE_CLIENT_PAYMENT_INFO, \
+    LEXICON_PAY_WITH_BINANCE_USDT, LEXICON_SET_SERVICE_PRICE
 
 
 def set_admin_menu(lang) -> InlineKeyboardMarkup:
     statistics_text = LEXICON_BUTTON_STATISTICS.get(lang, 'en')
     look_for_client_text = LEXICON_LOOK_FOR_CLIENT.get(lang, 'en')
-    look_for_order_not_paid_text = LOOK_FOR_ORDER_NOT_PAID.get(lang, 'en')
+    change_amount_due_text = LEXICON_SET_SERVICE_PRICE.get(lang, 'en')
     receipt_text = LEXICON_GIVE_CLIENT_PAYMENT_INFO.get(lang, 'en')
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -28,11 +29,11 @@ def set_admin_menu(lang) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=receipt_text,
                                      callback_data=AdminCallbackFactory(action="receipt_text").pack())
+            ],
+            [
+                InlineKeyboardButton(text=change_amount_due_text,
+                                     callback_data=AdminCallbackFactory(action="change_amount_due").pack()),
             ]
-            # [
-            #     InlineKeyboardButton(text=look_for_order_not_paid_text,
-            #                          callback_data=AdminCallbackFactory(action="look_for_order_not_paid").pack()),
-            # ]
         ]
     )
     return keyboard
@@ -89,7 +90,7 @@ def set_statistics_menu(lang) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=statistics_by_clients_tg,
                                      callback_data=AdminCallbackFactory(action="statistics_by_clients_tg").pack())
-                ],
+            ],
             [
                 InlineKeyboardButton(text=statistics_by_clients_excel,
                                      callback_data=AdminCallbackFactory(action="statistics_by_clients_excel").pack())
@@ -97,7 +98,7 @@ def set_statistics_menu(lang) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=statistics_by_client_tg,
                                      callback_data=AdminCallbackFactory(action="statistics_by_client_tg").pack())
-                ],
+            ],
             [
                 InlineKeyboardButton(text=statistics_by_client_excel,
                                      callback_data=AdminCallbackFactory(action="statistics_by_client_excel").pack())
@@ -110,6 +111,7 @@ def set_statistics_menu(lang) -> InlineKeyboardMarkup:
     )
 
     return keyboard
+
 
 def set_choose_client_for_receipt(clients: List[str]) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(
@@ -137,6 +139,18 @@ def set_choose_client(clients: List[str]) -> InlineKeyboardMarkup:
     )
     return keyboard
 
+def set_choose_client_for_change_amount_due(clients: List[str]) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=client,
+                                  callback_data=AdminCallbackFactory(
+                                      action="set_choose_client_for_change_amount_due", client_id=client).pack())]
+            for client in clients
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    return keyboard
 
 def set_choose_client_phone(clients: List[str]) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(
@@ -145,6 +159,18 @@ def set_choose_client_phone(clients: List[str]) -> InlineKeyboardMarkup:
                                   callback_data=AdminCallbackFactory(action="choose_client_phone",
                                                                      client_id=client).pack())]
             for client in clients
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    return keyboard
+
+def set_choose_asin(asins: List[str]) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=asin,
+                                  callback_data=AdminCallbackFactory(action="choose_asin", asin=asin).pack())]
+            for asin in asins
         ],
         resize_keyboard=True,
         one_time_keyboard=True
@@ -183,16 +209,16 @@ def set_choose_client_phone(clients: List[str]) -> InlineKeyboardMarkup:
 
 
 # Button for admin to answer to client
-def set_answer_to_client(lang) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=LEXICON_ANSWER_TO_CLIENT.get(lang, 'en'),
-                                     callback_data=ClientCallbackFactory(action="answer_to_client").pack())
-            ]
-        ]
-    )
-    return keyboard
+# def set_answer_to_client(lang) -> InlineKeyboardMarkup:
+#     keyboard = InlineKeyboardMarkup(
+#         inline_keyboard=[
+#             [
+#                 InlineKeyboardButton(text=LEXICON_ANSWER_TO_CLIENT.get(lang, 'en'),
+#                                      callback_data=ClientCallbackFactory(action="answer_to_client").pack())
+#             ]
+#         ]
+#     )
+#     return keyboard
 
 def set_back_to_menu(lang) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(
@@ -204,6 +230,7 @@ def set_back_to_menu(lang) -> InlineKeyboardMarkup:
         ]
     )
     return keyboard
+
 
 # def payment_button(amount: float) -> InlineKeyboardMarkup:
 #     approval_url_paypal = create_payment(amount)
@@ -232,29 +259,64 @@ def set_back_to_menu(lang) -> InlineKeyboardMarkup:
 #     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 #     return keyboard
 
-def payment_button() -> InlineKeyboardMarkup:
-    approval_url_paypal = 'https://www.paypal.com/donate/?hosted_button_id=AQNYY2MY7V5LY'
-    approval_url_pioneer = 'https://login.payoneer.com/'
+# def payment_button() -> InlineKeyboardMarkup:
+#     approval_url_paypal = 'https://www.paypal.com/donate/?hosted_button_id=AQNYY2MY7V5LY'
+#     approval_url_pioneer = 'https://login.payoneer.com/'
+#
+#     buttons = []
+#
+#     if approval_url_paypal:
+#         button_paypal = InlineKeyboardButton(
+#             text="Pay with PayPal",
+#             url=approval_url_paypal
+#         )
+#         buttons.append([button_paypal])
+#     else:
+#         buttons.append([InlineKeyboardButton(text="Error: Unable to create PayPal payment", callback_data="error_paypal")])
+#
+#     if approval_url_pioneer:
+#         button_pioneer = InlineKeyboardButton(
+#             text="Pay with Payoneer",
+#             url=approval_url_pioneer
+#         )
+#         buttons.append([button_pioneer])
+#     else:
+#         buttons.append([InlineKeyboardButton(text="Error: Unable to create Pioneer payment", callback_data="error_pioneer")])
+#
+#     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+#     return keyboard
 
-    buttons = []
+def payment_button_binance(lang) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=LEXICON_PAY_WITH_BINANCE_USDT.get(lang, 'en'),
+                                     callback_data=AdminCallbackFactory(action="pay_with_binance_usdt").pack())
+            ]
+        ]
+    )
+    return keyboard
 
-    if approval_url_paypal:
-        button_paypal = InlineKeyboardButton(
-            text="Pay with PayPal",
-            url=approval_url_paypal
-        )
-        buttons.append([button_paypal])
-    else:
-        buttons.append([InlineKeyboardButton(text="Error: Unable to create PayPal payment", callback_data="error_paypal")])
 
-    if approval_url_pioneer:
-        button_pioneer = InlineKeyboardButton(
-            text="Pay with Payoneer",
-            url=approval_url_pioneer
-        )
-        buttons.append([button_pioneer])
-    else:
-        buttons.append([InlineKeyboardButton(text="Error: Unable to create Pioneer payment", callback_data="error_pioneer")])
+def set_service_price(lang) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=LEXICON_SET_SERVICE_PRICE.get(lang, 'en'),
+                                     callback_data=ClientCallbackFactory(action="set_service_price").pack())
+            ]
+        ]
+    )
+    return keyboard
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def enter_asin(lang) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Enter ASIN",
+                                     callback_data=ClientCallbackFactory(action="enter_asin").pack())
+            ]
+        ]
+    )
     return keyboard
