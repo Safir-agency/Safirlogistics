@@ -234,6 +234,15 @@ async def update_amount_due(form_id, amount_due):
     except Exception as e:
         logger.error(f"Error while updating amount due: {e}")
 
+async def update_amount_due_by_asin(asin, amount_due):
+    try:
+        form = Form.get(Form.ASIN == asin)
+        payment = Payment.get(Payment.form_id == form.id)
+        payment.amount_due = amount_due
+        payment.save()
+    except Exception as e:
+        logger.error(f"Error while updating amount due by ASIN: {e}")
+
 async def get_asin_by_tg_id(telegram_id: int) -> list[Any] | None:
     try:
         asins_list = (Form

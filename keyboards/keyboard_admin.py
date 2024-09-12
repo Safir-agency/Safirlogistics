@@ -171,9 +171,7 @@ def set_choose_asin(asins: List[str]) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=asin,
                                   callback_data=AdminCallbackFactory(action="choose_asin", asin=asin).pack())]
             for asin in asins
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
+        ]
     )
     return keyboard
 
