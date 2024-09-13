@@ -1,1 +1,1 @@
-uvicorn bot:app --host 0.0.0.0 --port $PORT --reload
+uvicorn bot:app --port ${PORT:-8000} --host 0.0.0.0 --workers 1
