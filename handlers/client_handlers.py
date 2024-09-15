@@ -30,7 +30,6 @@ from lexicon.lexicon import LEXICON_START, LEXICON_TECHNICAL_SUPPORT, LEXICON_EN
 from lexicon.lexicon_admin import LEXICON_USER_MESSAGE, LEXICON_PLS_ANSWER, LEXICON_FORM_INFO_FROM_CLIENT, \
     LEXICON_USER_SEND_SCREENSHOT, LEXICON_DB_PRICE_UPDATED
 from py_logger import get_logger
-# from services.binance import create_usdt_address, check_payment_status
 from services.paypal import create_payment
 from states.states_admin import AdminStates
 from states.states_client import ClientCallbackFactory, ClientStates, TechSupportStates

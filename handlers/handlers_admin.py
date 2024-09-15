@@ -4,7 +4,7 @@ import asyncio
 from aiogram import types
 
 from keyboards.keyboards_client import send_screenshot_keyboard
-from services.binance import create_usdt_address, check_payment_status
+# from services.binance import create_usdt_address, check_payment_status
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
