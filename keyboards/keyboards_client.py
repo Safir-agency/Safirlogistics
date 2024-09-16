@@ -16,6 +16,7 @@ from config_data.config import Config, load_config
 
 config: Config = load_config('./config_data/.env')
 WEB_APP_URL = os.getenv('WEB_APP_URL')
+TECH_SUPPORT = os.getenv('TECH_SUPPORT_LINK')
 
 
 # def set_main_menu(user_id: int, lang) -> ReplyKeyboardMarkup:
@@ -70,7 +71,7 @@ def set_main_menu(user_id: int, lang) -> InlineKeyboardMarkup:
     )
     button_3 = InlineKeyboardButton(
         text=LEXICON_BUTTON_TECHNICAL_SUPPORT.get(lang, 'en'),
-        callback_data=ClientCallbackFactory(action="contacts").pack()
+        url=TECH_SUPPORT
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
