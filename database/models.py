@@ -34,12 +34,12 @@ class TelegramUsers(BaseModel):
         db_table = 'telegram_users'
 
 
-class Roles(BaseModel):
-    role_name = ForeignKeyField(TelegramUsers, backref='roles', on_delete='CASCADE')
-
-    class Meta:
-        database = db
-        db_table = 'roles'
+# class Roles(BaseModel):
+#     role_name = ForeignKeyField(TelegramUsers, backref='roles', on_delete='CASCADE')
+#
+#     class Meta:
+#         database = db
+#         db_table = 'roles'
 
 
 class Subscriptions(BaseModel):
@@ -162,7 +162,7 @@ class Payment(BaseModel):
     amount_due = DecimalField(decimal_places=2)  # Загальна сума до оплати
     amount_paid = DecimalField(decimal_places=2, default=0.0)  # Сума, яка була сплачена
     is_paid = BooleanField(default=False)  # Чи була сума повністю сплачена
-    due_date = DateTimeField()  # Термін оплати
+    due_date = DateTimeField(default=datetime.datetime.now() + datetime.timedelta(days=30))
     created_at = DateTimeField(default=datetime.datetime.now)
     updated_at = DateTimeField(default=datetime.datetime.now)
 
@@ -184,21 +184,31 @@ class Invoices(BaseModel):
         db_table = 'invoices'
 
 
+class Admins(BaseModel):
+    id = AutoField()
+    telegram_id = ForeignKeyField(TelegramUsers, backref='admins', on_delete='CASCADE')
+    role_name = CharField()
+
+    class Meta:
+        database = db
+        db_table = 'admins'
+
 def create_tables():
     with db:
         db.create_tables([TelegramUsers], safe=True)
-        db.create_tables([Roles], safe=True)
+        # db.create_tables([Roles], safe=True)
         db.create_tables([Subscriptions], safe=True)
         db.create_tables([Form], safe=True)
         db.create_tables([FormFBA], safe=True)
         db.create_tables([SecondStage], safe=True)
         db.create_tables([SecondStageAdmin], safe=True)
         # db.create_tables([Discounts], safe=True)
-        db.create_tables([Form], safe=True)
+        # db.create_tables([Form], safe=True)
         db.create_tables([Clients], safe=True)
         db.create_tables([TechSupport], safe=True)
         db.create_tables([Payment], safe=True)
-        db.create_tables([Invoices], safe=True)
+        # db.create_tables([Invoices], safe=True)
+        db.create_tables([Admins], safe=True)
 
 
 def do_peewee_migration():

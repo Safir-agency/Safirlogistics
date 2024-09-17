@@ -1,10 +1,10 @@
 import asyncio
 import re
 from peewee import DoesNotExist, fn
-from typing import Tuple, List
+from typing import Tuple, List, Any
 from dateutil.relativedelta import relativedelta
 
-from database.models import TelegramUsers, Subscriptions, Form, Clients, TechSupport, Payment, Invoices, FormFBA
+from database.models import TelegramUsers, Subscriptions, Form, Clients, TechSupport, Payment, Invoices, FormFBA, Admins
 from py_logger import get_logger
 from datetime import datetime, time, timedelta
 import random
@@ -49,6 +49,8 @@ async def create_random_order_number():
     except Exception as e:
         logger.error(f"Error while creating random order number: {e}")
         return None
+
+
 async def save_form_fba(form_id):
     try:
         form_fba, created = FormFBA.get_or_create(
@@ -67,9 +69,10 @@ async def save_form_fba(form_id):
     except Exception as e:
         logger.error(f"Error while saving form FBA to database: {e}")
 
+
 # Асинхронная функция сохранения заполненной формы в базу данных
 async def save_filled_form_to_db(product_name, ASIN, SET, NOT_SET, number_of_sets,
-                                    number_of_units_in_set, number_of_units, FBA, FBM, phone_number, comment):
+                                 number_of_units_in_set, number_of_units, FBA, FBM, phone_number, comment):
     try:
         # Provide default values if fields are empty or None
         number_of_sets = number_of_sets or 0
@@ -106,6 +109,7 @@ async def save_filled_form_to_db(product_name, ASIN, SET, NOT_SET, number_of_set
     except Exception as e:
         logger.error(f"Error while saving form to database: {e}")
 
+
 async def save_client(telegram_id, form_id):
     try:
         telegram_user = TelegramUsers.get(TelegramUsers.telegram_id == telegram_id)
@@ -118,6 +122,13 @@ async def save_client(telegram_id, form_id):
     except Exception as e:
         logger.error(f"Error while saving client to database: {e}")
 
+async def save_amount_due(form_id, amount_due):
+    try:
+        form = Form.get(Form.id == form_id)
+        form.amount_due = amount_due
+        form.save()
+    except Exception as e:
+        logger.error(f"Error while saving amount due to database: {e}")
 
 async def save_invoice(user_id: int, invoice_id: str, amount: int,
                        status: str, payment_method: str) -> None:
@@ -174,6 +185,80 @@ async def save_user_tech_support(telegram_id, message, file_type, file_id):
     except Exception as e:
         print(f"Error while saving client to database tech support: {e}")
 
+async def get_client_id_by_telegram_id(telegram_id: int) -> int:
+    try:
+        user = TelegramUsers.get(TelegramUsers.telegram_id == telegram_id)
+        return user.id
+    except TelegramUsers.DoesNotExist:
+        print(f"User with telegram id {telegram_id} not found.")
+        return None
+
+async def get_form_id_by_asin(asin: str) -> int:
+    try:
+        form = Form.get(Form.ASIN == asin)
+        return form.id
+    except Form.DoesNotExist:
+        print(f"Form with ASIN {asin} not found.")
+        return None
+
+async def get_last_form_id_by_asin(asin: str) -> int:
+    try:
+        form = Form.select().where(Form.ASIN == asin).order_by(Form.created_at.desc()).get()
+        return form.id
+    except Form.DoesNotExist:
+        print(f"Form with ASIN {asin} not found.")
+        return None
+
+async def save_payment(client_id, form_id,amount_due, amount_paid, is_paid):
+    try:
+        payment, created = Payment.get_or_create(
+            client_id=client_id,
+            form_id=form_id,
+            amount_due=amount_due,
+            amount_paid=amount_paid,
+            is_paid=is_paid)
+
+        if created:
+            logger.info(f"New payment saved to database: {payment.id}")
+        else:
+            logger.info(f"Payment already exists in database: {payment.id}")
+
+    except Exception as e:
+        logger.error(f"Error while saving payment to database: {e}")
+
+async def update_amount_due(form_id, amount_due):
+    try:
+        payment = Payment.get(Payment.form_id == form_id)
+        payment.amount_due = amount_due
+        payment.save()
+    except Exception as e:
+        logger.error(f"Error while updating amount due: {e}")
+
+async def update_amount_due_by_asin(asin, amount_due):
+    try:
+        form = Form.get(Form.ASIN == asin)
+        payment = Payment.get(Payment.form_id == form.id)
+        payment.amount_due = amount_due
+        payment.save()
+    except Exception as e:
+        logger.error(f"Error while updating amount due by ASIN: {e}")
+
+async def get_asin_by_tg_id(telegram_id: int) -> list[Any] | None:
+    try:
+        asins_list = (Form
+                      .select(Form.ASIN)
+                      .join(Clients, on=(Form.id == Clients.form_id))
+                      .join(TelegramUsers, on=(Clients.telegram_id == TelegramUsers.id))
+                      .where(TelegramUsers.telegram_id == telegram_id)
+                      .dicts())
+
+        asins = [form['ASIN'] for form in asins_list]
+
+        return asins
+
+    except Exception as e:
+        logger.error(f"Error while getting ASINs for telegram_id {telegram_id}: {e}")
+        return None
 
 async def get_client_id_by_invoice_id(invoiceId: str) -> int:
     try:
@@ -191,6 +276,7 @@ async def get_telegram_user_id(username):
     except TelegramUsers.DoesNotExist:
         print(f"User with username {username} not found.")
         return None
+
 
 async def get_telegram_id_by_username(username):
     try:
@@ -400,21 +486,18 @@ async def get_product_name_by_client(telegram_username):
         user_id = TelegramUsers.select(TelegramUsers.id).where(
             TelegramUsers.telegram_username == telegram_username).scalar()
 
-        #get all not paid orders_id
-        not_paid_orders = (Payment.select(Payment.form_id)
-                           .join(Clients)
-                           .join(TelegramUsers)
-                           .where(TelegramUsers.id == user_id,
-                                  Payment.is_paid == False)).dicts()
+        all_orders = (Payment.select(Payment.form_id)
+                        .join(Clients)
+                        .join(TelegramUsers)
+                        .where(TelegramUsers.id == user_id)).dicts()
 
-        #get all not paid product_names
         product_names = []
-        for order in not_paid_orders:
+        for order in all_orders:
             form = Form.get(Form.id == order['form_id'])
             product_names.append(form.product_name)
 
         order_numbers = []
-        for order in not_paid_orders:
+        for order in all_orders:
             form = Form.get(Form.id == order['form_id'])
             order_numbers.append(form.order_number)
 
@@ -423,6 +506,7 @@ async def get_product_name_by_client(telegram_username):
     except Exception as e:
         logger.error(f"Error while getting product name by client from database: {e}")
         return None
+
 
 async def get_asin(product_name):
     try:
@@ -719,3 +803,12 @@ async def get_clients_not_paid():
         logger.error(f"Error while getting client from database: {e}")
         return None
 
+
+async def get_all_admins():
+    try:
+        admins = Admins.select()
+        return admins
+
+    except Exception as e:
+        logger.error(f"Error while getting admins from database: {e}")
+        return None

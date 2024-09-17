@@ -1,1 +1,1 @@
-web: uvicorn bot:app --host 0.0.0.0 --port $PORT --reload
+web: uvicorn bot:app --port ${PORT:-8000} --host 0.0.0.0
