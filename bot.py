@@ -42,7 +42,7 @@ logger.info(f'WEB_SERVER_PORT: {WEB_SERVER_PORT}')
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Установка вебхука
-    response = await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+    response = await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     logger.info(f"Webhook set: {response}")
     yield
     # await bot.delete_webhook()
