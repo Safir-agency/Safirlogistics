@@ -7,14 +7,14 @@ from config_data.config import load_config
 
 db_config = load_config('./config_data/.env').db
 
-# Подключение к базе данных
-db = PostgresqlDatabase(
-    db_config.database,
-    host=db_config.db_host,
-    user=db_config.db_user,
-    password=db_config.db_password
-)
+db = PostgresqlDatabase(db_config.database_url)
 
+# Попытка подключения
+try:
+    db.connect()
+    print("Successfully connected to the database")
+except Exception as e:
+    print(f"Failed to connect to the database: {e}")
 
 class BaseModel(Model):
     class Meta:
